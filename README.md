@@ -32,7 +32,7 @@ soar-to-prism-translator/
 
 ---
 
-## ⚙️ Requirements
+## Requirements
 
 - Java 11+
 - [ANTLR4](https://www.antlr.org/)
