@@ -8,6 +8,10 @@ const double gender_factor = 1.2;
 const double l2mprob = 0.9 //low_to_med_prob*gender-factor already done
 const double stay_low_prob = 0.1 //complement already done
 
+const double hs = 0.2;
+const double no_change = 0.6;
+
+
 module user
     ssq: [0..2] init 0;
     gender: [0..1] init 1;
@@ -16,9 +20,9 @@ module user
 
 endmodule
 
-module headset
-    h: [0..8];
+module opticflow
     optic_flow : [0..2] init 0;
-    latency : [0..2] init 0;
+
+    [] optic_flow=0 -> hs:(optic_flow'=1) + hs:(optic_flow'=2) + no_change:(optic_flow'=0);
 
 endmodule   
