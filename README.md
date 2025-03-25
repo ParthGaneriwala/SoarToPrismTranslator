@@ -184,12 +184,6 @@ soar-to-prism-translator/
 
 ---
 
-## 👥 Authors
-
-- Parth Ganeriwala (@ParthGaneriwala)
-
----
-
 ## 🔗 References
 
 - [Soar Cognitive Architecture](https://soar.eecs.umich.edu/)
