@@ -5,6 +5,12 @@ import edu.fit.assist.translator.gen.*;
 import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
 
 public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements SoarVisitor<Object> {
+    Rule currentRule;
+    String currentContext = "";
+    boolean negateCondition = false;
+
+    public SoarRules rules;
+
     /**
      * Visit a parse tree produced by {@link SoarParser#soar}.
      *
