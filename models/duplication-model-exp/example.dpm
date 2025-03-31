@@ -1,0 +1,63 @@
+pta
+
+// NOTE this is written in 'dupl template' format, which is PRISM plus tiny add-on syntax that is
+// used by dupl-prism to replicate pieces and some mapping syntax.  Do not feed this directly
+// into PRISM/PRISMATIC, it will puke.  First run dupl-prism on it, e.g., per a nearby Makefile.
+// Also, do *not* put the word 'modul' (missing 'e' here deliberately but you get the idea) in a comment!  You'll 
+// mess up the ultra-simple regex based not-parsing done by dupl-prism
+
+// Event probabilities.
+const double pbox = 1.0;	// Prob targeting system draws bounding box around attacker
+const double pgate = 1.0;	// Prob attacker succeeds in attempt to get through gate
+const double pnote = 1.0;	// Prob user notices new bounding box
+const double ptag = 1.0;	// Prob user successfully tags bounding box
+
+// Times for events to happen.
+const int appear_t = 5;		// Max time by which attacker must appear
+const int box_t = 2;		// Time after attacker appears to draw bounding box
+const int gate_t = 4;		// Time it takes attacker to get through gate after they appear
+const int note_t = 1;		// Time after bounding box is drawn it takes user to notice.
+const int tag_t = 1;		// Time it takes user to tag attacker after noticing bounding box
+
+const int max_t = 25;		// Max simulation time
+
+global 	time : clock;
+
+module attacker#
+	s# : [0..7] init 0;
+	noticed# : bool init false;
+	tagged# : bool init false;
+	t# : clock; // Time when attacker appears (really??)
+
+	invariant
+		(s#=0 => time<=appear_t)
+	endinvariant
+
+	// Attacker appears
+	[] 	s#=0 -> (s#'=1)&(t#'=0);
+	// Bounding box drawn around attacker
+	[] 	s#=1 & t#>=box_t -> pbox:(s#'=2) + (1-pbox):(s#'=4);
+	// Attacker noticed by user
+	[note#]	s#=2 & t#>=box_t+note_t -> pnote:(s#'=3)&(noticed#'=true) + (1-pnote):(s#'=4);
+	// Attacker tagged by user
+	[tag#]	s#=3 & t#>=box_t+note_t+tag_t -> ptag:(s#'=5)&(tagged#'=true) + (1-ptag):(s#'=4);
+	// Untagged attacker attempts to get through the gate
+	[]	s#=4 & t#>=gate_t -> pgate:(s#'=7) + (1-pgate):(s#'=6);
+	// Tagged attacker always fails
+	[]	s#=5 -> (s#'=6);
+endmodule
+
+module user
+	u : [0..3] init 0;
+
+	// User notices a bounding box around an attacker-- test subdupl
+	[note@]	u=0 & t@>=note_t+box_t -> (u'=1);
+	[note@] u=1 & t@>=note_t+box_t & !noticed@ -> (u'=1);
+
+	// User tags a boxed and noticed attacker
+	[tag@] u=1 & t@>=note_t+box_t+tag_t -> (u'=2);
+	[tag@] u=2 & t@>=note_t+box_t+tag_t & !tagged@ -> (u'=2);
+
+	// User has successfully tagged both attackers
+	[]	u=2 & tagged1 & tagged2 -> (u'=3);
+endmodule

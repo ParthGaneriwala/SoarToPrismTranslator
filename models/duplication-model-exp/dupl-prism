@@ -1,0 +1,77 @@
+#! /usr/bin/env perl
+# dupl-prism
+# - duplicate PRISM modules and expressions to easily make N copies of a module.
+
+# This is roughly based on the original CIRCA duplprims, with suitable
+# mods to take advantage of PRISM's module renaming
+# https://www.prismmodelchecker.org/manual/ThePRISMLanguage/ModuleRenaming (NOTE: Not...see below)
+# and the need to essentially 'map-dupl' a later expression across 
+# the possible values (eg, reproduce t#>1 for all values of #)...
+
+# Actually in current form it was faster to just replicate the syntax the old way, rather than
+# using ModuleRenaming, but not sure if that is slower to load in prism...dont really care much.
+# Using modulerenaming would require something like figuring out variable decls and so on,
+# which is certainly harder than what we have here...
+# And, to the degree that # stands out in the prism input files, it makes it more
+# obvious which vbles will get dupld, all over the place, not just at decl time.
+
+# In orig duplprims, each 'module' could have a diff number of replications.
+# That meant that each module had to (often repetitively) declare its replication count.
+# Here, for even more simplicity, there's just one count of replications.
+# - if we want to follow the Lacrosse example, this script could take in the replcount as [optional] arg.
+# For now, I hardwired it.
+
+# New feature is 'line at a time dupl' where, inside stuff that is *not* being a completely
+# duplicated module, you can put in '@' and it will get replicated $dupl times w/ the @ substituted by index
+## -------------------------------------------------------------------
+
+$/ = "endmodule";	# split on endmodule, so each read-in string is a module
+$dupl=2;
+
+# the first string will have all the preamble before the first module... so print that once only.
+
+print "// NOTE NOTE NOTE this is auto-generated, do not edit\n\n";
+
+sub subdupl	# take in a module and break into newline-separated lines and impl subduplication on @s
+{
+  $in=$_[0];
+  @lines=split("\n");
+  for $_ (@lines) {
+	if (/\@/) {
+	  #warn "Found a subdupl\n";
+          $orig = $_;
+          for ($i=0;$i<$dupl;$i++)
+            {
+                s/\@/$i/g;
+                print "$_\n";
+                $_=$orig;
+          }
+	}
+	else { print "$_\n"; }
+  }
+}
+
+while(<>)	# $_ is a full module
+{
+  if (/\#/)	# any module with # in it will get dupld
+    {
+	($preamble,$module)=split(("module"));	# easy, but nukes the delimiter, requiring ugly below
+	#($preamble,$module)= m/(.*?)(module.*)/; # no wfm
+	print $preamble;
+        $_ = "module $module";
+        $orig = $_;
+        for ($i=0;$i<$dupl;$i++)
+          {
+                s/\#/$i/g;
+                print;
+                print "module\n";	# this fills in the endmodule
+                $_=$orig;
+          }
+    }
+  else	# print the ones with no dupls
+    {
+        #print;
+ 	&subdupl($_);
+    }
+}
+
