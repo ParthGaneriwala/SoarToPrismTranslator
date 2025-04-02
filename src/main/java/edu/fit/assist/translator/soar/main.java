@@ -35,10 +35,10 @@ public class main{
             Output outputFormatter = new Output(visitor.rules);
             String outputText = outputFormatter.generateOutput();
             System.out.println(outputText);
-            PrintWriter pw = new PrintWriter(new File("output.pm"));
-            pw.println(outputText);
-            pw.flush();
-            pw.close();
+//            PrintWriter pw = new PrintWriter(new File("output.pm"));
+//            pw.println(outputText);
+//            pw.flush();
+//            pw.close();
 
         }catch(Exception e){
             e.printStackTrace();
