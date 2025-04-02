@@ -40,7 +40,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
         }else{
             currentIsElaboration = false;
         }
-        System.out.println(ruleName);
+        // System.out.println(ruleName);
         rules.createNewRule(ruleName);
 
 
@@ -78,7 +78,6 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
     public Object visitCondition_side(SoarParser.Condition_sideContext ctx) {
 
         visit(ctx.state_imp_cond());
-
         // Visit the rest of the guards (if any)
         List<SoarParser.CondContext> guards = ctx.cond();
         for(SoarParser.CondContext guard : guards){
@@ -119,6 +118,9 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitCond(SoarParser.CondContext ctx) {
+
+        negateCondition = ctx.Negative_pref() != null;
+        visit(ctx.positive_cond());
         return null;
     }
 
@@ -130,6 +132,8 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitPositive_cond(SoarParser.Positive_condContext ctx) {
+
+        visit(ctx.conds_for_one_id());
         return null;
     }
 
@@ -141,6 +145,16 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitConds_for_one_id(SoarParser.Conds_for_one_idContext ctx) {
+
+        // get '<var>'
+        String var = (String)visit(ctx.id_test().test().simple_test());
+        currentContext = currentRule.getContext(var);
+//        System.out.println(var);
+
+
+        for(SoarParser.Attr_value_testsContext attribute : ctx.attr_value_tests()){
+            visit(attribute);
+        }
         return null;
     }
 
@@ -152,7 +166,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitId_test(SoarParser.Id_testContext ctx) {
-        return null;
+        return visitChildren(ctx);
     }
 
     /**
@@ -163,7 +177,150 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitAttr_value_tests(SoarParser.Attr_value_testsContext ctx) {
+
+        String line = ctx.getText();
+//        System.out.println(line);
+        String variable = ctx.attr_test(0).getText();
+        variable = currentContext+"_"+variable;
+        variable = cleanVariableName(variable);
+//        System.out.println(currentContext+"_"+variable);
+
+
+        // get value check
+        List<SoarParser.Value_testContext> values = ctx.value_test();
+        boolean existsCheck = values.size()==0;
+
+        if (!variable.equals("state_io") && !variable.equals("state_operator")){
+            currentRule.addVariable(variable);
+            rules.addVariableValue(variable, "nil");
+        }
+
+        // Attribute has no value, so guard is checking for existance
+        if(existsCheck){
+            if(ctx.Negative_pref() != null){ // check for not existing
+                currentRule.addGuard(variable+" = nil");
+            }else{ // check for presence
+                currentRule.addGuard(variable+" != nil");
+            }
+        }else{ // Attribute has a value
+            String value = (String)visit(values.get(0));
+
+            System.out.println(variable + " " + value);
+
+            // Check is value is in the format: <x>
+            String[] valueList =  value.split(" ");
+            String attributePartOfValue = valueList[valueList.length-1];
+//            if(currentRule.ruleName.startsWith("top-state*elaborate*error-info*warn-condition*low")){
+//                //System.err.println(attributePartOfValue +"; "+attributePartOfValue+"E");
+//            }
+            if(!((value.startsWith("<") && value.endsWith(">") && !value.contains(" "))|| attributePartOfValue.contains("*"))){
+                //if(value.contains("*")){
+                //System.err.println(value +"; "+attributePartOfValue+"E");
+                //}
+                // Removes the conditional check from value
+                String onlyValue = value.replaceAll("<= ", "").replaceAll(">= ", "").replaceAll("= ", "");
+                onlyValue = onlyValue.replaceAll("< ", "").replaceAll("> ", "");
+
+                // Don't add inequalities to the list of values a variable can have
+                if(onlyValue.equals(value)){
+                    rules.addVariableValue(variable, onlyValue);
+                }else{
+                    // It is an inequality, hence we can use it for setting Types
+                    // Example: ^var1 <= <v2>, where <v2> is ^var2
+                    // Hence, type of ^var1 is the same as ^var2
+                    String leftSide = variable;
+                    // if value is a number directly add the type instead of adding it to the graph
+
+                    try {
+                        int rightValue = Integer.parseInt(onlyValue);
+                        rules.addVariableValue(variable, onlyValue);
+                    }catch(Exception e){}
+
+                    try {
+                        double rightValue = Double.parseDouble(onlyValue);
+                        rules.addVariableValue(variable, onlyValue);
+                    }catch(Exception e2){}
+
+                    String rightSide = currentRule.getContext(onlyValue);
+                    //System.out.println(leftSide);
+                    //System.out.println(rightSide);
+                    rules.addTypeNode(leftSide, rightSide);
+                    rules.addTypeNode(rightSide, leftSide);
+
+                }
+
+                for(String key : currentRule.contextMap.keySet()){
+                    if(value.contains(key)){
+                        value = value.replaceAll(key, currentRule.contextMap.get(key));
+                        break;
+                    }
+                }
+
+                if(value.contains("<") || value.contains(">")){
+                    currentRule.addGuard(variable+" "+value);
+                }else{
+                    if(ctx.Negative_pref() != null ^ negateCondition){
+                        currentRule.addGuard(variable+" != "+value);
+
+                        if(rules.variables.containsKey(value)){
+                            String leftSide = variable;
+                            String rightSide = value;
+                            //System.out.println(leftSide);
+                            //System.out.println(rightSide);
+                            rules.addTypeNode(leftSide, rightSide);
+                            rules.addTypeNode(rightSide, leftSide);
+                        }
+
+
+                    }else{
+                        currentRule.addGuard(variable+" = "+value);
+
+                    }
+                }
+            }else{
+
+                // check for negation
+
+                // Negate if one negation exists, if two exist, then don't
+                /*if(ctx.Negative_pref() != null ^ negateCondition){
+
+                    value = "!" + value;
+                    currentRule.addContext(value, variable);
+                }else{
+                    currentRule.addContext(value, variable);
+                }*/
+                if(!currentRule.contextMap.containsKey(value)){
+                    // assignment
+                    currentRule.addContext(value, variable);
+                }else{
+                    // equality check
+
+                    String leftSide = variable;
+                    value = currentRule.getContext(value);
+                    String rightSide = value;
+                    //System.out.println(leftSide);
+                    //System.out.println(rightSide);
+                    rules.addTypeNode(leftSide, rightSide);
+                    rules.addTypeNode(rightSide, leftSide);
+
+
+                    if(ctx.Negative_pref() != null ^ negateCondition){
+                        currentRule.addGuard(variable+" != "+value);
+                    }else{
+                        currentRule.addGuard(variable+" = "+value);
+                    }
+
+                }
+            }
+        }
         return null;
+    }
+
+    public String cleanVariableName(String s){
+        s=s.replaceAll("\\_output\\-link", "");
+        s=s.replaceAll("\\_input\\-link", "");
+        s=s.replaceAll("\\_flightdata", "");
+        return s;
     }
 
     /**
@@ -174,7 +331,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitAttr_test(SoarParser.Attr_testContext ctx) {
-        return null;
+        return visitChildren(ctx);
     }
 
     /**
@@ -185,7 +342,13 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitValue_test(SoarParser.Value_testContext ctx) {
-        return null;
+
+        SoarParser.TestContext testContext = ctx.test();
+        if(testContext == null){
+            return null;
+        }
+        return visit(testContext);
+
     }
 
     /**
@@ -196,6 +359,15 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitTest(SoarParser.TestContext ctx) {
+
+        // Case 1: it is a 'simple test'
+        if(ctx.simple_test() != null){
+            return visit(ctx.simple_test());
+        }
+        // Case 2: it is a 'Conjunctive test'
+        if(ctx.conjunctive_test() != null){
+            return visit(ctx.conjunctive_test());
+        }
         return null;
     }
 
@@ -361,7 +533,8 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitValue(SoarParser.ValueContext ctx) {
-        return null;
+
+        return visitChildren(ctx);
     }
 
     /**
