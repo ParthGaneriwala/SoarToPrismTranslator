@@ -19,17 +19,41 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitSoar(SoarParser.SoarContext ctx) {
-        return null;
+        return visitChildren(ctx);
     }
 
     /**
      * Visit a parse tree produced by {@link SoarParser#soar_production}.
-     *
+     * Runs when Parser encounters a New Production
      * @param ctx the parse tree
      * @return the visitor result
      */
     @Override
     public Object visitSoar_production(SoarParser.Soar_productionContext ctx) {
+
+        //Create a new rule
+        String ruleName = ctx.sym_constant().getText();
+        boolean currentIsElaboration;
+        if(ruleName.contains("elaborate")){
+            currentIsElaboration = true;
+//            System.out.println(ruleName);
+        }else{
+            currentIsElaboration = false;
+        }
+        //System.out.println(ruleName);
+        rules.createNewRule(ruleName);
+
+
+        // Get all the statements that precede the arrow (-->)
+        SoarParser.Condition_sideContext conditions = ctx.condition_side();
+
+        currentRule = rules.getRuleByName(ruleName);
+        currentRule.isElaboration = currentIsElaboration;
+        // sp{ ruleName
+        visit(ctx.condition_side());
+        // -->
+        visit(ctx.action_side());
+        //}
         return null;
     }
 
