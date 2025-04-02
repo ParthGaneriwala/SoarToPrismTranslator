@@ -40,7 +40,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
         }else{
             currentIsElaboration = false;
         }
-        //System.out.println(ruleName);
+        System.out.println(ruleName);
         rules.createNewRule(ruleName);
 
 
@@ -65,7 +65,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitFlags(SoarParser.FlagsContext ctx) {
-        return null;
+        return visitChildren(ctx);
     }
 
     /**
@@ -76,17 +76,38 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitCondition_side(SoarParser.Condition_sideContext ctx) {
+
+        visit(ctx.state_imp_cond());
+
+        // Visit the rest of the guards (if any)
+        List<SoarParser.CondContext> guards = ctx.cond();
+        for(SoarParser.CondContext guard : guards){
+            visit(guard);
+        }
         return null;
     }
 
     /**
      * Visit a parse tree produced by {@link SoarParser#state_imp_cond}.
-     *
+     * Assumes first guard starts with (state <s> ...)
      * @param ctx the parse tree
      * @return the visitor result
      */
     @Override
     public Object visitState_imp_cond(SoarParser.State_imp_condContext ctx) {
+
+        String stateKeyword = ctx.STATE().getSymbol().getText();
+        currentContext = stateKeyword;
+        // get '<s>'
+        String var = (String)visit(ctx.id_test().test().simple_test());
+
+//        System.out.println(var);
+        currentRule.addContext(var, currentContext);
+
+        for(SoarParser.Attr_value_testsContext attribute : ctx.attr_value_tests()){
+            visit(attribute);
+        }
+
         return null;
     }
 

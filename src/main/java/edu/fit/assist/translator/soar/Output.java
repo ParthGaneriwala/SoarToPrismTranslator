@@ -17,7 +17,7 @@ public class Output {
 
     private String generateModules() {
         String output ="module ";
-        output += "endmodule";
+        output += "\nendmodule";
         return output;
     }
 

@@ -9,6 +9,27 @@ public class SoarRules {
     LinkedHashMap<String, Integer> mapNameToType;
     LinkedHashMap<String, ArrayList<String>> typeGraph;
 
+    public SoarRules(){
+        rules = new ArrayList<Rule>();
+        variables = new LinkedHashMap<String, Variable>();
+        mapNameToType = new LinkedHashMap<String, Integer>();
+        typeGraph = new LinkedHashMap<String, ArrayList<String>>();
+    }
+
+    public void addTypeNode(String name1, String name2){
+        if (!typeGraph.containsKey(name1)){
+            ArrayList<String> nodes = new ArrayList<String>();
+            nodes.add(name2);
+            typeGraph.put(name1,nodes);
+        }else{
+            ArrayList<String> nodes = typeGraph.get(name1);
+            if(!nodes.contains(name2)){
+                nodes.add(name2);
+            }
+            typeGraph.put(name1,nodes);
+        }
+    }
+
     public void parseVariableValuePass(){
         for (String varName: variables.keySet()){
             Variable var = variables.get(varName);
