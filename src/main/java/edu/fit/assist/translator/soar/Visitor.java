@@ -34,12 +34,8 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
         //Create a new rule
         String ruleName = ctx.sym_constant().getText();
         boolean currentIsElaboration;
-        if(ruleName.contains("elaborate")){
-            currentIsElaboration = true;
-//            System.out.println(ruleName);
-        }else{
-            currentIsElaboration = false;
-        }
+        //            System.out.println(ruleName);
+        currentIsElaboration = ruleName.contains("elaborate");
         // System.out.println(ruleName);
         rules.createNewRule(ruleName);
 
