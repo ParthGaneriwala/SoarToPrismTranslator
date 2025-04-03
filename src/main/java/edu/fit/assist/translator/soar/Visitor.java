@@ -315,7 +315,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
     public String cleanVariableName(String s){
         s=s.replaceAll("\\_output\\-link", "");
         s=s.replaceAll("\\_input\\-link", "");
-        s=s.replaceAll("\\_flightdata", "");
+        s=s.replaceAll("\\_systemdata", "");
         return s;
     }
 
