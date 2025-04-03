@@ -375,7 +375,13 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitConjunctive_test(SoarParser.Conjunctive_testContext ctx) {
-        return null;
+
+        //System.err.println("Conjunctive test not supported in the following "+ctx.getText());
+        for(SoarParser.Simple_testContext temp:ctx.simple_test()){
+            return visitChildren(temp);
+        }
+        return visitChildren(ctx);
+
     }
 
     /**
@@ -386,6 +392,10 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitSimple_test(SoarParser.Simple_testContext ctx) {
+
+        if(ctx.relational_test() != null){
+            return visit(ctx.relational_test());
+        }
         return null;
     }
 
@@ -397,7 +407,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitMulti_value_test(SoarParser.Multi_value_testContext ctx) {
-        return null;
+        return visitChildren(ctx);
     }
 
     /**
@@ -408,7 +418,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitDisjunction_test(SoarParser.Disjunction_testContext ctx) {
-        return null;
+        return visitChildren(ctx);
     }
 
     /**
@@ -419,7 +429,20 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitRelational_test(SoarParser.Relational_testContext ctx) {
-        return null;
+
+        String output = "";
+        if(ctx.relation() != null){
+            output += (String)visit(ctx.relation());
+        }
+
+
+        if(ctx.single_test() != null){
+            output += (String)visit(ctx.single_test());
+        }
+
+
+        return (Object)output;
+
     }
 
     /**
@@ -430,7 +453,8 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitRelation(SoarParser.RelationContext ctx) {
-        return null;
+
+        return (Object)(ctx.getText()+" ");
     }
 
     /**
@@ -441,7 +465,8 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitSingle_test(SoarParser.Single_testContext ctx) {
-        return null;
+
+        return visitChildren(ctx);
     }
 
     /**
@@ -452,7 +477,9 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitVariable(SoarParser.VariableContext ctx) {
-        return null;
+
+        // return variable name
+        return (Object)("<"+ctx.sym_constant().Sym_constant().getSymbol().getText()+">");
     }
 
     /**
@@ -463,6 +490,19 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitConstant(SoarParser.ConstantContext ctx) {
+
+        if (ctx.sym_constant() != null){
+            return (Object)ctx.sym_constant().Sym_constant().getSymbol().getText();
+        }
+        if(ctx.Int_constant() != null){
+            return (Object)ctx.Int_constant().getSymbol().getText();
+        }
+        if(ctx.Float_constant() != null){
+            return (Object)ctx.Float_constant().getSymbol().getText();
+        }
+        if(ctx.Print_string() != null){
+            return (Object)ctx.Print_string().getSymbol().getText();
+        }
         return null;
     }
 
