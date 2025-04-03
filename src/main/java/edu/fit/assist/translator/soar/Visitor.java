@@ -514,6 +514,12 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitAction_side(SoarParser.Action_sideContext ctx) {
+
+        if(ctx.action() != null){
+            for(SoarParser.ActionContext action : ctx.action()){
+                visit(action);
+            }
+        }
         return null;
     }
 
@@ -525,6 +531,13 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitAction(SoarParser.ActionContext ctx) {
+        // context
+        String contextVar = (String)visit(ctx.variable());
+        currentContext = currentRule.getContext(contextVar);
+        List<SoarParser.Attr_value_makeContext> attributes = ctx.attr_value_make();
+        for(SoarParser.Attr_value_makeContext attribute : attributes){
+            visit(attribute);
+        }
         return null;
     }
 
