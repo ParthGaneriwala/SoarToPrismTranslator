@@ -6,7 +6,7 @@ import java.io.*;
 import java.util.Scanner;
 
 public class main{
-    public static String debugPath = "D:/ICS_SOAR/load.soar";
+    public static String debugPath = "D:\\FIT\\Github Projects -Parth\\ICS_SOAR\\load.soar";
 
     public static void main(String[] args){
         try{

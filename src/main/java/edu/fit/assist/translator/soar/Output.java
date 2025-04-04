@@ -72,29 +72,30 @@ public class Output {
                 var.varType = Variable.S_CONST;
             }
 
-//            output.append("const ").append(var.varType).append(var.name).append(" = ");
-//            if(var.varType == Variable.S_CONST){
+            output.append("const ").append(var.name).append(" = ");
+            if(var.varType == Variable.S_CONST){
 //                output.append("{");
-//                boolean first = true;
-//                for(String varVal : var.values){
-//                    if(!first){
-//                        output.append(",");
-//                    }else{
-//                        first = false;
-//                    }
-//                    output.append(varVal);
-//                }
-//            }else if(var.varType == Variable.INT){
-//                output.append("integer;\n");
-//            }else if(var.varType == Variable.FLOAT){
-//                output.append("double;\n");
-//            }else{
-//                output.append("TYPE ERROR");
-//                System.err.println("TYPE ERROR with variable "+var.name);
-//            }
-//        }
+                boolean first = true;
+                for(String varVal : var.values){
+                    if(!first){
+                        output.append(",");
+                    }else{
+                        first = false;
+                    }
+                    output.append(varVal);
+                }
+            }else if(var.varType == Variable.INT){
+                output.append("integer;\n");
+            }else if(var.varType == Variable.FLOAT){
+                output.append("double;\n");
+            }else{
+                output.append("TYPE ERROR");
+                System.err.println("TYPE ERROR with variable "+var.name);
+            }
+            output.append("\n");
+        }
         return new StringBuilder(output + "\n\n");
     }
-        return output;
+//        return output;
     }
-}
+
