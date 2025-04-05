@@ -201,7 +201,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
         }else{ // Attribute has a value
             String value = (String)visit(values.get(0));
 
-            System.out.println(variable + " " + value);
+//            System.out.println(variable + " " + value);
 
             // Check is value is in the format: <x>
             String[] valueList =  value.split(" ");
@@ -238,8 +238,8 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
                     }catch(Exception e2){}
 
                     String rightSide = currentRule.getContext(onlyValue);
-                    //System.out.println(leftSide);
-                    //System.out.println(rightSide);
+//                    System.out.println(leftSide);
+//                    System.out.println(rightSide);
                     rules.addTypeNode(leftSide, rightSide);
                     rules.addTypeNode(rightSide, leftSide);
 
@@ -549,7 +549,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitPrint(SoarParser.PrintContext ctx) {
-        return null;
+        return visitChildren(ctx);
     }
 
     /**
@@ -560,7 +560,13 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitFunc_call(SoarParser.Func_callContext ctx) {
-        return null;
+
+        String operation = (String)visit(ctx.func_name());
+        String operand1 = (String)visit(ctx.value(0));
+        String operand2 = (String)visit(ctx.value(1));
+        String infixValue = operand1 + " " + operation + " "+ operand2;
+
+        return (Object)infixValue;
     }
 
     /**
@@ -571,7 +577,9 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitFunc_name(SoarParser.Func_nameContext ctx) {
-        return null;
+
+        return (Object)ctx.getText();
+
     }
 
     /**
@@ -594,6 +602,56 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitAttr_value_make(SoarParser.Attr_value_makeContext ctx) {
+        String attributeName = (String)visit(ctx.variable_or_sym_constant(0).sym_constant());
+        String variable = currentContext+"_"+attributeName;
+        variable = cleanVariableName(variable);
+        SoarParser.Value_makeContext value = ctx.value_make();
+        currentContext = variable;
+        String val = (String)visit(value);
+        //if(currentRule.ruleName.startsWith("apply*takeoff")){
+        //System.out.println(val);
+        //}
+        if(val == null){
+            return null;
+        }
+
+        if(val.startsWith("<") && val.endsWith(">")){
+
+            //System.out.println(variable);
+            //System.out.println(val);
+            /* If variable value is aready in the context map and its identifier differs
+                Then, treat it as an assignment statement.
+                Example (<s> ^value <val>)-->(<s> ^attribute <val>) is doing ^attribute := ^value
+            */
+            if(currentRule.contextMap.containsKey(val) && !currentRule.getContext(val).equals(variable)){
+                currentRule.addAttrValue(variable, currentRule.getContext(val));
+                rules.addVariableValue(variable, "^VAR"+currentRule.getContext(val));
+
+                String leftSide = variable;
+                String rightSide = currentRule.getContext(val);
+                //System.out.println(leftSide);
+                //System.out.println(rightSide);
+                rules.addTypeNode(leftSide, rightSide);
+                rules.addTypeNode(rightSide, leftSide);
+
+            }else{
+                currentRule.addContext(val, variable);
+            }
+
+        }else if(val.contains("<") && val.contains(">")){
+
+            String attribute = val.replaceAll("(<[a-zA-Z0-9*]+>).*", "$1");
+
+            val = val.replaceAll(attribute, currentRule.contextMap.get(attribute));
+            currentRule.addAttrValue(variable, val);
+        }else{
+            currentRule.addAttrValue(variable, val);
+            rules.addVariableValue(variable, val);
+            if(currentRule.isElaboration && currentRule.guards.size() == 1 && currentRule.guards.get(0).equals("state_superstate = nil")){
+                rules.variables.get(variable).initialValue = val;
+            }
+        }
+
         return null;
     }
 
@@ -605,7 +663,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitVariable_or_sym_constant(SoarParser.Variable_or_sym_constantContext ctx) {
-        return null;
+        return visitChildren(ctx);
     }
 
     /**
@@ -660,6 +718,6 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitSym_constant(SoarParser.Sym_constantContext ctx) {
-        return null;
+        return (Object)(ctx.Sym_constant().getSymbol().getText());
     }
 }
