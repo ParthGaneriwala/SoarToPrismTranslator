@@ -1,6 +1,8 @@
 package edu.fit.assist.translator.soar;
 
 import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class Output {
     SoarRules rules;
@@ -86,7 +88,26 @@ public class Output {
 //                }
             }else if(var.varType == Variable.INT){
                 output.append("const integer ");
-                output.append(var.name).append(" = ").append(var.values.get(1)).append("\n");
+                List<Integer> filtered = var.values.stream()
+                        .filter(s -> !s.equalsIgnoreCase("nil"))
+                        .map(Integer::parseInt)
+                        .distinct()
+                        .sorted()
+                        .toList();
+
+                if (filtered.size() > 1) {
+                    int min = filtered.get(0);
+                    int max = filtered.get(filtered.size() - 1);
+                    int init = filtered.get(0); // or any domain-specific default
+                    output.append(var.name).append(": [")
+                            .append(min).append("..").append(max)
+                            .append("] init ").append(init).append(";\n");
+                } else if (filtered.size() == 1) {
+                    output.append(var.name).append(" = ").append(filtered.get(0)).append(";\n");
+                } else {
+                    System.err.println("// No valid values found for " + (var.name) + "\n");
+                }
+
             }else if(var.varType == Variable.FLOAT){
                 output.append("const double ");
                 output.append(var.name).append(" = ").append(var.values.get(0)).append("\n");
