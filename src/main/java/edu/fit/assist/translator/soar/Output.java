@@ -18,10 +18,22 @@ public class Output {
     }
 
     private String generateModules() {
-        String output ="module ";
-        output += "\nendmodule";
-        return output;
+        StringBuilder output = new StringBuilder();
+        output.append("module user\n");
+
+        for (Rule rule : rules.rules) {
+            String guard = rule.formatGuard();
+            String rhs = rule.formatRHS();
+            output.append("    [] ").append(guard).append(" -> ").append(rhs).append(";\n");
+        }
+
+        output.append("endmodule\n\n");
+        return output.toString();
     }
+
+
+
+
 
     private StringBuilder generateVariableDeclarations() {
         StringBuilder output = new StringBuilder();

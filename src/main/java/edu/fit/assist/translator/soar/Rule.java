@@ -13,6 +13,8 @@ public class Rule{
     boolean isLearningRule = false;
     double priority = 0.0;
     boolean isElaboration = false;
+    LinkedHashMap<String, Double> valueProbs;
+
     public Rule(String name, LinkedHashMap<String, Variable> map){
         this.ruleName = name;
         this.contextMap = new HashMap<String, String>();
@@ -44,7 +46,26 @@ public class Rule{
     }
 
 
+    public String formatRHS() {
+        StringBuilder rhs = new StringBuilder();
+        boolean first = true;
+        double prob = 1.0 / valueMap.size();
 
+        for (String var : valueMap.keySet()) {
+            if (!first) {
+                rhs.append(" + ");
+            } else {
+                first = false;
+            }
+            rhs.append(prob).append(": (").append(var).append("'=").append(valueMap.get(var)).append(")");
+        }
+
+        if (rhs.length() == 0) {
+            rhs.append("1: true"); // fallback in case there's no RHS update
+        }
+
+        return rhs.toString();
+    }
     public String listVariables(){
         String output = "";
         boolean first = true;
