@@ -34,7 +34,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
         //Create a new rule
         String ruleName = ctx.sym_constant().getText();
         boolean currentIsElaboration;
-        //            System.out.println(ruleName);
+//        System.out.println(ctx.sym_constant().Sym_constant().getText());
         currentIsElaboration = ruleName.contains("elaborate");
         // System.out.println(ruleName);
         rules.createNewRule(ruleName);
@@ -490,7 +490,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitConstant(SoarParser.ConstantContext ctx) {
-
+//        System.out.println(ctx.getText());
         if (ctx.sym_constant() != null){
             return (Object)ctx.sym_constant().Sym_constant().getSymbol().getText();
         }
@@ -533,6 +533,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
     public Object visitAction(SoarParser.ActionContext ctx) {
         // context
         String contextVar = (String)visit(ctx.variable());
+//        System.out.println(contextVar);
         currentContext = currentRule.getContext(contextVar);
         List<SoarParser.Attr_value_makeContext> attributes = ctx.attr_value_make();
         for(SoarParser.Attr_value_makeContext attribute : attributes){
@@ -590,7 +591,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitValue(SoarParser.ValueContext ctx) {
-
+//        System.out.println(ctx.getText());
         return visitChildren(ctx);
     }
 
@@ -617,8 +618,8 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
 
         if(val.startsWith("<") && val.endsWith(">")){
 
-            //System.out.println(variable);
-            //System.out.println(val);
+//            System.out.println(variable);
+//            System.out.println(val);
             /* If variable value is aready in the context map and its identifier differs
                 Then, treat it as an assignment statement.
                 Example (<s> ^value <val>)-->(<s> ^attribute <val>) is doing ^attribute := ^value
@@ -674,7 +675,77 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitValue_make(SoarParser.Value_makeContext ctx) {
-        return null;
+//        System.out.println(ctx.getText());
+        String value = "";
+        // get the value of the attribute Example: <o> in (<s> ^operator <o> +)
+        value = (String)visit(ctx.value(0));
+        String pref_specifier = null;
+        // visit the preference specifier Example = 0.0 in (<s> ^opetator <o> = 0.0)
+        if(ctx.pref_specifier(0) != null){
+            pref_specifier = (String)visit(ctx.pref_specifier(0));
+
+            // check for second preference specifier Example = in (<s> ^opetator <o> >,=)
+            if(ctx.pref_specifier(1) != null){
+                pref_specifier += ","+(String)visit(ctx.pref_specifier(1));
+            }
+
+            //System.out.println(currentContext);
+            //System.out.println(value +" " +pref_specifier);
+
+
+        }
+
+        if(currentContext.equals("state_operator") && pref_specifier != null){
+            // Check if rule is a learning Rule (<s> ^operator <o> = 0.0)
+            //System.out.println(pref_specifier);
+            // check if rule is a learning rule
+            if(pref_specifier.contains("=")){
+                currentRule.isLearningRule = true;
+            }
+            // if it is a learning rule, get the priority
+            if(pref_specifier.startsWith("=") && pref_specifier.length() > 1){
+
+
+                // set priority value
+                try{
+                    currentRule.priority = Double.parseDouble(pref_specifier.substring(1));
+                }catch(Exception e){e.printStackTrace();}
+                // Search for the name of the operator of which we are setting the preference.
+                String op_name = "";
+                for(String guard : currentRule.guards){
+
+                    if(guard.startsWith("state_operator_name = ")){
+                        op_name = guard.substring("state_operator_name = ".length());
+                    }
+                }
+                currentRule.addAttrValue("state_operator_name", op_name);
+                // check if rule has max priority
+            }else if(pref_specifier.contains(">")){
+                // set priority value
+                currentRule.priority = 10_000;
+                // Search for the name of the operator of which we are setting the preference.
+                String op_name = "";
+                for(String guard : currentRule.guards){
+
+                    if(guard.startsWith("state_operator_name = ")){
+                        op_name = guard.substring("state_operator_name = ".length());
+                    }
+                }
+                currentRule.addAttrValue("state_operator_name", op_name);
+            }
+        }
+
+
+        // get the value of the attribute when using a compressed notation Example: new_val in (<s> ^value old_val - new_val +)
+        if(ctx.value(1) != null){
+            value = (String)visit(ctx.value(1));
+        }
+        if(pref_specifier !=null && pref_specifier.equals("-")){
+            value = "nil";
+        }
+
+
+        return (Object)value;
     }
 
     /**
@@ -685,6 +756,19 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitPref_specifier(SoarParser.Pref_specifierContext ctx) {
+        //System.out.println(ctx.getText());
+        if (ctx.unary_pref() != null){
+            return visit(ctx.unary_pref());
+        }
+        if (ctx.unary_or_binary_pref() != null){
+            String pref = (String)visit(ctx.unary_or_binary_pref());
+            if(ctx.value() != null){
+                String val = (String)visit(ctx.value());
+                return (Object)(pref + " " + val);
+            }
+            return (Object)pref;
+        }
+
         return null;
     }
 
@@ -718,6 +802,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitSym_constant(SoarParser.Sym_constantContext ctx) {
+//        System.out.println(ctx.Sym_constant().getText());
         return (Object)(ctx.Sym_constant().getSymbol().getText());
     }
 }

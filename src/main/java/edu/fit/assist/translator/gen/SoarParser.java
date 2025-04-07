@@ -2317,8 +2317,14 @@ public class SoarParser extends Parser {
 
 	@SuppressWarnings("CheckReturnValue")
 	public static class Value_makeContext extends ParserRuleContext {
-		public ValueContext value() {
-			return getRuleContext(ValueContext.class,0);
+//		public ValueContext value() {
+//			return getRuleContext(ValueContext.class,0);
+//		}
+		public List<ValueContext> value() {
+			return getRuleContexts(ValueContext.class);
+		}
+		public ValueContext value(int i) {
+			return getRuleContext(ValueContext.class,i);
 		}
 		public TerminalNode Negative_pref() { return getToken(SoarParser.Negative_pref, 0); }
 		public List<Pref_specifierContext> pref_specifier() {
