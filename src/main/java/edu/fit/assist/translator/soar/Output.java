@@ -19,18 +19,27 @@ public class Output {
 
     private String generateModules() {
         StringBuilder output = new StringBuilder();
+
         output.append("module user\n");
 
         for (Rule rule : rules.rules) {
             String guard = rule.formatGuard();
-            String rhs = rule.formatRHS();
-            output.append("    [] ").append(guard).append(" -> ").append(rhs).append(";\n");
+            if (guard.contains("state_name = nil") || guard.contains("state_superstate")) {
+                continue;
+            }
+            else {
+                String rhs = rule.formatRHS();
+                output.append("    [] ").append(guard).append(" -> ").append(rhs).append(";\n");
+            }
         }
 
         output.append("endmodule\n\n");
         return output.toString();
     }
 
+    private String sanitizeName(String name) {
+        return name.replace("-", "_").replace("'", "_prime").replace("^", "");
+    }
 
 
 
@@ -88,16 +97,6 @@ public class Output {
 
 
             if(var.varType == Variable.S_CONST){
-//                output.append("{");
-//                boolean first = true;
-//                for(String varVal : var.values){
-//                    if(!first){
-//                        output.append(",");
-//                    }else{
-//                        first = false;
-//                    }
-//                    output.append(varVal);
-//                }
             }else if(var.varType == Variable.INT){
                 output.append("const integer ");
                 List<Integer> filtered = var.values.stream()
@@ -110,19 +109,19 @@ public class Output {
                 if (filtered.size() > 1) {
                     int min = filtered.get(0);
                     int max = filtered.get(filtered.size() - 1);
-                    int init = filtered.get(0); // or any domain-specific default
-                    output.append(var.name).append(": [")
+                    int init = filtered.get(0);
+                    output.append(var.name.replace("-", "_")).append(": [")
                             .append(min).append("..").append(max)
                             .append("] init ").append(init).append(";\n");
                 } else if (filtered.size() == 1) {
-                    output.append(var.name).append(" = ").append(filtered.get(0)).append(";\n");
+                    output.append(sanitizeName(var.name)).append(" = ").append(filtered.get(0)).append(";\n");
                 } else {
                     System.err.println("// No valid values found for " + (var.name) + "\n");
                 }
 
             }else if(var.varType == Variable.FLOAT){
                 output.append("const double ");
-                output.append(var.name).append(" = ").append(var.values.get(0)).append("\n");
+                output.append(sanitizeName(var.name)).append(" = ").append(var.values.get(0)).append("\n");
             }else{
                 output.append("TYPE ERROR");
                 System.err.println("TYPE ERROR with variable "+var.name);
