@@ -189,5 +189,3 @@ soar-to-prism-translator/
 - [Soar Cognitive Architecture](https://soar.eecs.umich.edu/)
 - [PRISM Model Checker](https://www.prismmodelchecker.org/)
 - [ANTLR4 Documentation](https://github.com/antlr/antlr4)
-
-```
