@@ -1,6 +1,7 @@
 package edu.fit.assist.translator.soar;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -38,25 +39,6 @@ public class Output {
     }
 
 
-    private double getProbFromVariable(String varName) {
-        // First, sanitize the name (if it's already sanitized elsewhere, skip this step)
-        String sanitized = varName.replace("state_", "").replace("-", "_");
-
-        Variable var = rules.variables.get(sanitized);
-
-        if (var == null || var.values == null || var.values.isEmpty()) {
-            System.err.println("// Warning: Variable " + varName + " not found or has no values.");
-            return 1.0; // Fallback to safe value
-        }
-
-        try {
-            // Assume first value is the probability
-            return Double.parseDouble(var.values.get(0));
-        } catch (NumberFormatException e) {
-            System.err.println("// Error: Cannot parse probability from variable " + varName);
-            return 1.0;
-        }
-    }
     private String generateMergedTransitions() {
         StringBuilder output = new StringBuilder();
         Pattern aliasPattern = Pattern.compile("<.*?>");
@@ -90,6 +72,7 @@ public class Output {
             for (String guard : proposeRule.guards) {
                 if (guard.contains("^operator") && guard.contains("=")) {
                     String[] parts = guard.split("\\s+");
+                    System.out.println(Arrays.toString(parts));
                     if (parts.length == 3 && parts[1].contains("operator") && parts[2].startsWith("<")) {
                         aliasValue = parts[2];
                         break;
@@ -189,10 +172,10 @@ public class Output {
             output.append(merged);
         }
 
-        String other = generateOtherRules();
-        if (!other.isBlank()) {
-            output.append(other);
-        }
+//        String other = generateOtherRules();
+//        if (!other.isBlank()) {
+//            output.append(other);
+//        }
 
         output.append("endmodule\n\n");
         return output.toString();
