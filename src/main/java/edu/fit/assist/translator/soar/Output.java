@@ -16,7 +16,7 @@ public class Output {
         String output = "\ndtmc\n\n";
         rules.parseVariableValuePass();
         output += generateVariableDeclarations();
-        output += generateModules();  // <--- this already calls generateMergedTransitions + OtherRules + wraps in module
+        output += generateModules();
         return output;
     }
 
@@ -131,7 +131,7 @@ public class Output {
                 }
             }
 
-            // STEP 3: Fallback to values in initialize
+            // Fallback to values in initialize
             if (probVar == null) {
                 for (String key : initAssignments.keySet()) {
                     if (key.contains("prob") && !key.contains("log")) {
@@ -210,7 +210,7 @@ public class Output {
         StringBuilder output = new StringBuilder();
 
 
-        // Generate types for all variables :D
+        // Generate types for all variables
         for(Variable var : rules.variables.values()){
             var.generateType();
             rules.mapNameToType.put(var.name, var.varType);
