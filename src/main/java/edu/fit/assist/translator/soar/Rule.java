@@ -10,6 +10,7 @@ public class Rule{
     ArrayList<String> guards; // Stores all guards for this rule
     LinkedHashMap<String, Variable> variableMap;
     LinkedHashMap<String, String> valueMap; // Stores the value to apply in the right side of the rule. Maps Variable name to new value
+    LinkedHashMap<Double, ArrayList<String>> groupedAssignments;
     boolean isLearningRule = false;
     double priority = 0.0;
     boolean isElaboration = false;
@@ -22,6 +23,8 @@ public class Rule{
         this.guards = new ArrayList<String>();
         this.variableMap = map;
         this.valueMap = new LinkedHashMap<String, String>();
+        this.valueProbs = new LinkedHashMap<String, Double>();
+        this.groupedAssignments = new LinkedHashMap<>();
     }
 
     public void populateDuplicate(Rule newRule){
@@ -46,26 +49,61 @@ public class Rule{
     }
 
 
+    public void addJointAssignment(double prob, LinkedHashMap<String, String> updates) {
+        if (groupedAssignments == null) {
+            groupedAssignments = new LinkedHashMap<>();
+        }
+
+        ArrayList<String> assigns = new ArrayList<>();
+        for (String var : updates.keySet()) {
+            assigns.add(var + "'=" + updates.get(var));
+        }
+
+        groupedAssignments.put(prob, assigns);
+    }
+
     public String formatRHS() {
+        if (groupedAssignments != null && !groupedAssignments.isEmpty()) {
+            StringBuilder rhs = new StringBuilder();
+            boolean first = true;
+
+            for (Double prob : groupedAssignments.keySet()) {
+                if (!first) rhs.append(" + ");
+                first = false;
+
+                ArrayList<String> assigns = groupedAssignments.get(prob);
+                rhs.append(prob).append(": (").append(String.join(") & (", assigns)).append(")");
+            }
+
+            return rhs.toString();
+        }
+
         StringBuilder rhs = new StringBuilder();
         boolean first = true;
-        double prob = 1.0 / valueMap.size();
 
         for (String var : valueMap.keySet()) {
-            if (!first) {
-                rhs.append(" + ");
-            } else {
-                first = false;
+            double prob = 1.0 / valueMap.size();
+            if (valueProbs != null && valueProbs.containsKey(var)) {
+                prob = valueProbs.get(var);
             }
+
+            if (!first) rhs.append(" + ");
+            first = false;
+
             rhs.append(prob).append(": (").append(var).append("'=").append(valueMap.get(var)).append(")");
         }
 
         if (rhs.length() == 0) {
-            rhs.append("1: true"); // fallback in case there's no RHS update
+            rhs.append("1: true");
         }
 
         return rhs.toString();
     }
+
+
+
+
+
     public String listVariables(){
         String output = "";
         boolean first = true;

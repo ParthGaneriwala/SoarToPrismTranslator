@@ -6,7 +6,7 @@ import java.io.*;
 import java.util.Scanner;
 
 public class main{
-    public static String debugPath = "D:\\FIT\\Github Projects -Parth\\ICS_SOAR\\load.soar";
+    public static String debugPath = "D:\\ICS_SOAR\\load.soar";
 
     public static void main(String[] args){
         try{
@@ -18,7 +18,7 @@ public class main{
             }else {
                 inputText = cleanText(Input.getSoarRules(debugPath));
             }
-//            System.out.println(inputText);
+            System.out.println(inputText);
 
             // Load Soar File
             ANTLRInputStream input = new ANTLRInputStream(inputText);
