@@ -18,7 +18,7 @@ public class main{
             }else {
                 inputText = cleanText(Input.getSoarRules(debugPath));
             }
-            System.out.println(inputText);
+//            System.out.println(inputText);
 
             // Load Soar File
             ANTLRInputStream input = new ANTLRInputStream(inputText);
@@ -32,13 +32,16 @@ public class main{
             Visitor visitor = new Visitor();
             visitor.rules = new SoarRules();
             visitor.visit(parser.soar());
-            Output outputFormatter = new Output(visitor.rules);
-            String outputText = outputFormatter.generateOutput();
-            System.out.println(outputText);
-//            PrintWriter pw = new PrintWriter(new File("output.pm"));
-//            pw.println(outputText);
-//            pw.flush();
-//            pw.close();
+//            Output outputFormatter = new Output(visitor.rules);
+//            String outputText = outputFormatter.generateOutput();
+//            System.out.println(outputText);
+            Translate translatorFormatter = new Translate(visitor.rules);
+            String translatedText = translatorFormatter.translateSoarToPrismGeneral();
+            System.out.println(translatedText);
+            PrintWriter pw = new PrintWriter(new File("output.pm"));
+            pw.println(translatedText);
+            pw.flush();
+            pw.close();
 
         }catch(Exception e){
             e.printStackTrace();

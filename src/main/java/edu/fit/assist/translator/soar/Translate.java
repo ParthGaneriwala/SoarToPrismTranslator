@@ -12,7 +12,7 @@ public class Translate {
     public Translate(SoarRules rules){
         this.rules = rules;
     }
-    private String translateSoarToPrismGeneral() {
+    String translateSoarToPrismGeneral() {
         StringBuilder output = new StringBuilder();
 
         // Extract global constants from the apply*initialize rule.
@@ -41,7 +41,6 @@ public class Translate {
             String baseName = proposeRule.ruleName.substring("propose*".length());
             Rule applyRule = findApplyRuleFor(baseName, rules);
             if (applyRule == null) continue; // no matching rule
-
             // Derive the probability expression generically.
             String probabilityExpr = extractProbabilityExpression(proposeRule, applyRule, globalConstants);
 
@@ -55,7 +54,7 @@ public class Translate {
             // Store this outcome under the extracted guard.
             transitionsByGuard
                     .computeIfAbsent(guard, k -> new ArrayList<>())
-                    .add(new MergedTransition(probabilityExpr, assignmentString));
+                    .add(new MergedTransition(guard, probabilityExpr, assignmentString));
         }
 
         // Construct the PRISM module using the grouped transitions.
@@ -65,10 +64,12 @@ public class Translate {
         for (Map.Entry<String, List<MergedTransition>> entry : transitionsByGuard.entrySet()) {
             String guard = entry.getKey();
             List<MergedTransition> outcomes = entry.getValue();
-
+            if(guard.contains("state_superstate"))
+                continue;
             output.append("    [] ").append(guard).append(" -> ");
             for (int i = 0; i < outcomes.size(); i++) {
                 MergedTransition outcome = outcomes.get(i);
+
                 output.append(outcome.probabilityExpr)
                         .append(": ").append(outcome.assignmentString);
                 if (i < outcomes.size() - 1) {

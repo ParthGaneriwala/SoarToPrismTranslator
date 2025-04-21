@@ -1,5 +1,6 @@
 package edu.fit.assist.translator.soar;
 
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 
 /**
@@ -67,26 +68,34 @@ public class TranslatorUtils {
 
         // 1. Check alias pattern in propose rule's guards.
         String aliasValue = null;
-        for (String guard : proposeRule.guards) {
-            if (guard.contains("^operator") && guard.contains("=")) {
+//        System.out.println(proposeRule.contextMap);
+        for (String guard : proposeRule.contextMap.values()) {
+
+            if (guard.contains("state_log")) {
+//                System.out.println(guard);
                 String[] parts = guard.split("\\s+");
+//                System.out.println(Arrays.toString(parts));
                 // Check that we have at least three tokens and that the third token is an alias (e.g., "<something>")
                 if (parts.length >= 3 && parts[1].contains("operator") && parts[2].startsWith("<")) {
                     aliasValue = parts[2];
                     break;
+                } else if (parts.length == 1) {
+
+                    aliasValue = parts[0];
                 }
+
             }
         }
         if (aliasValue != null) {
-            for (String guard : proposeRule.guards) {
+            for (String guard : proposeRule.contextMap.values()) {
+//                System.out.println(guard + ": " + aliasValue);
                 if (guard.contains(aliasValue)) {
                     String[] parts = guard.trim().split("\\s+");
-                    if (parts.length >= 3) {
-                        // Normalize the variable name: replace hyphens with underscores, and ensure it starts with "state_"
-                        String lhs = parts[0].replace("-", "_");
-                        probabilityExpr = lhs.startsWith("state_") ? lhs : "state_" + lhs;
-                        break;
-                    }
+                    System.out.println(Arrays.toString(parts));
+                    // Normalize the variable name: replace hyphens with underscores, and ensure it starts with "state_"
+                    String lhs = parts[0].replace("-", "_").replace("_log","");
+                    probabilityExpr = lhs.startsWith("state_") ? lhs : "state_" + lhs;
+                    break;
                 }
             }
         }

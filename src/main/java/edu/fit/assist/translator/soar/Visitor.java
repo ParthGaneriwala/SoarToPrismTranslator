@@ -610,7 +610,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
         currentContext = variable;
         String val = (String)visit(value);
         //if(currentRule.ruleName.startsWith("apply*takeoff")){
-        //System.out.println(val);
+//        System.out.println(val);
         //}
         if(val == null){
             return null;
@@ -630,8 +630,8 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
 
                 String leftSide = variable;
                 String rightSide = currentRule.getContext(val);
-                //System.out.println(leftSide);
-                //System.out.println(rightSide);
+//                System.out.println(leftSide);
+//                System.out.println(rightSide);
                 rules.addTypeNode(leftSide, rightSide);
                 rules.addTypeNode(rightSide, leftSide);
 
@@ -677,20 +677,25 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
     public Object visitValue_make(SoarParser.Value_makeContext ctx) {
 //        System.out.println(ctx.getText());
         String value = "";
-        // get the value of the attribute Example: <o> in (<s> ^operator <o> +)
-        value = (String)visit(ctx.value(0));
         String pref_specifier = null;
+        value = (String)visit(ctx.value(0));
+        // get the value of the attribute Example: <o> in (<s> ^operator <o> +)
+        if(ctx.pref_specifier(2) != null){
+
+            pref_specifier = (String)visit(ctx.pref_specifier(2));
+//            System.out.println(pref_specifier);
+        }
+
+
         // visit the preference specifier Example = 0.0 in (<s> ^opetator <o> = 0.0)
         if(ctx.pref_specifier(0) != null){
             pref_specifier = (String)visit(ctx.pref_specifier(0));
-
+//            System.out.println(currentContext);
+//            System.out.println(value +" " +pref_specifier);
             // check for second preference specifier Example = in (<s> ^opetator <o> >,=)
             if(ctx.pref_specifier(1) != null){
                 pref_specifier += ","+(String)visit(ctx.pref_specifier(1));
             }
-
-            //System.out.println(currentContext);
-            //System.out.println(value +" " +pref_specifier);
 
 
         }
@@ -756,18 +761,19 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitPref_specifier(SoarParser.Pref_specifierContext ctx) {
-        //System.out.println(ctx.getText());
         if (ctx.unary_pref() != null){
             return visit(ctx.unary_pref());
         }
         if (ctx.unary_or_binary_pref() != null){
             String pref = (String)visit(ctx.unary_or_binary_pref());
+
             if(ctx.value() != null){
                 String val = (String)visit(ctx.value());
                 return (Object)(pref + " " + val);
             }
             return (Object)pref;
         }
+
 
         return null;
     }
@@ -780,6 +786,10 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitUnary_pref(SoarParser.Unary_prefContext ctx) {
+
+        if(ctx.Negative_pref() != null){
+            return (Object)(ctx.Negative_pref().getSymbol().getText());
+        }
         return null;
     }
 
@@ -791,6 +801,8 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitUnary_or_binary_pref(SoarParser.Unary_or_binary_prefContext ctx) {
+
+//        System.out.println(ctx.getText() + " Why?");
         return null;
     }
 
