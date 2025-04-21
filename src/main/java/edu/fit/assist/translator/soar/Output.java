@@ -1,9 +1,6 @@
 package edu.fit.assist.translator.soar;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -22,29 +19,14 @@ public class Output {
     }
 
 
-    private String generateOtherRules() {
-        StringBuilder output = new StringBuilder();
-
-        for (Rule rule : rules.rules) {
-            if (rule.ruleName.startsWith("propose*") || rule.ruleName.startsWith("apply*")) continue;
-
-            String guard = rule.formatGuard();
-            if (guard.contains("state_name = nil") || guard.contains("state_superstate")) continue;
-
-            String rhs = rule.formatRHS();
-            output.append("    [] ").append(guard).append(" -> ").append(rhs).append(";\n");
-        }
-
-        return output.toString();
-    }
-
-
     private String generateMergedTransitions() {
         StringBuilder output = new StringBuilder();
-        Pattern aliasPattern = Pattern.compile("<.*?>");
 
         // Cache variables initialized in apply*initialize
         LinkedHashMap<String, String> initAssignments = new LinkedHashMap<>();
+        Set<String> matched = null;
+        Set<String> matchedProposeVals = new LinkedHashSet<>();
+        Set<String> matchedApplyGuards = new LinkedHashSet<>();
         for (Rule rule : rules.rules) {
             if (rule.ruleName.equals("apply*initialize")) {
                 initAssignments.putAll(rule.valueMap);
@@ -54,110 +36,154 @@ public class Output {
         for (Rule proposeRule : rules.rules) {
             if (!proposeRule.ruleName.startsWith("propose*")) continue;
             String baseName = proposeRule.ruleName.substring("propose*".length());
-
-            Rule applyRule = rules.rules.stream()
+            List<Rule> matchingApplyRules = rules.rules.stream()
                     .filter(r -> r.ruleName.equals("apply*" + baseName))
-                    .findFirst().orElse(null);
-            if (applyRule == null) continue;
+                    .toList();
 
-            System.out.println("Looking to merge: propose*" + baseName + " + apply*" + baseName);
-            System.out.println("    Propose Guards: " + proposeRule.guards);
-            System.out.println("    Propose ValueMap: " + proposeRule.valueMap);
-            System.out.println("    Apply ValueMap: " + applyRule.valueMap);
 
-            String probVar = null;
+            if (proposeRule.guards.stream().anyMatch(guard -> guard.contains("state_superstate"))) {
+                continue;
+            }
+            for (Rule applyRule : matchingApplyRules) {
+                System.out.println("Looking to merge: propose*" + baseName + " + apply*" + baseName);
+                System.out.println("    Propose Guards: " + proposeRule.guards);
+                System.out.println("    Propose ValueMap: " + proposeRule.valueMap);
+                System.out.println("    Apply Guards: " + applyRule.guards);
+                System.out.println("    Apply ValueMap: " + applyRule.valueMap);
 
-            // Check alias pattern (^operator = <alias>)
-            String aliasValue = null;
-            for (String guard : proposeRule.guards) {
-                if (guard.contains("^operator") && guard.contains("=")) {
-                    String[] parts = guard.split("\\s+");
-                    System.out.println(Arrays.toString(parts));
-                    if (parts.length == 3 && parts[1].contains("operator") && parts[2].startsWith("<")) {
-                        aliasValue = parts[2];
-                        break;
+
+                for (String proposeVal : proposeRule.valueMap.values()) {
+                    for (String applyGuard : applyRule.guards) {
+                        if (applyGuard.contains(proposeVal)) {
+                            matchedProposeVals.add(proposeVal);
+                            matchedApplyGuards.add(applyGuard);
+                        }
                     }
                 }
-            }
 
-            if (aliasValue != null) {
+                System.out.println("Matched propose values (" + matchedProposeVals.size() + "): "
+                        + matchedProposeVals);
+                System.out.println("Matched apply guards  (" + matchedApplyGuards.size() + "): "
+                        + matchedApplyGuards);
+
+                System.out.print("Apply ValueMap for this rule:");
+                for (Map.Entry<String, String> e : applyRule.valueMap.entrySet()) {
+                    System.out.println("  " + e.getKey() + " = " + e.getValue());
+                }
+
+
+                String probVar = null;
+                // Check alias pattern (^operator = <alias>)
+                String aliasValue = null;
                 for (String guard : proposeRule.guards) {
-                    if (guard.contains(aliasValue)) {
-                        String[] parts = guard.trim().split("\\s+");
-                        if (parts.length == 3) {
-                            String lhs = parts[0].replace("-", "_");
-                            if (lhs.startsWith("state_")) {
-                                probVar = lhs;
-                            } else {
-                                probVar = "state_" + lhs;
-                            }
+                    if (guard.contains("^operator") && guard.contains("=")) {
+                        String[] parts = guard.split("\\s+");
+                        System.out.println(Arrays.toString(parts));
+                        if (parts.length == 3 && parts[1].contains("operator") && parts[2].startsWith("<")) {
+                            aliasValue = parts[2];
                             break;
                         }
                     }
                 }
-            }
 
-            // If not found, check apply valueMap directly
-            if (probVar == null) {
-                String bestMatch = null;
-                for (String var : applyRule.valueMap.keySet()) {
-                    String clean = var.toLowerCase();
-                    if (clean.contains("prob") && !clean.contains("log")) {
-                        bestMatch = var;
-                        break;
-                    } else if (clean.contains("log") && bestMatch == null) {
-                        bestMatch = var;
+                if (aliasValue != null) {
+                    for (String guard : proposeRule.guards) {
+                        if (guard.contains(aliasValue)) {
+                            String[] parts = guard.trim().split("\\s+");
+                            if (parts.length == 3) {
+                                String lhs = parts[0].replace("-", "_");
+                                if (lhs.startsWith("state_")) {
+                                    probVar = lhs;
+                                } else {
+                                    probVar = "state_" + lhs;
+                                }
+                                break;
+                            }
+                        }
                     }
                 }
-                if (bestMatch != null) {
-                    probVar = "state_" + bestMatch.replace("state_", "").replace("-", "_");
-                }
-            }
 
-            // Fallback to values in initialize
-            if (probVar == null) {
-                for (String key : initAssignments.keySet()) {
-                    if (key.contains("prob") && !key.contains("log")) {
-                        probVar = "state_" + key.replace("state_", "").replace("-", "_");
-                        break;
+                // If not found, check apply valueMap directly
+                if (probVar == null) {
+                    String bestMatch = null;
+                    for (String var : applyRule.valueMap.keySet()) {
+                        String clean = var.toLowerCase();
+                        if (clean.contains("prob") && !clean.contains("log")) {
+                            bestMatch = var;
+                            break;
+                        } else if (clean.contains("log") && bestMatch == null) {
+                            bestMatch = var;
+                        }
+                    }
+                    if (bestMatch != null) {
+                        probVar = "state_" + bestMatch.replace("state_", "").replace("-", "_");
                     }
                 }
+
+                // Fallback to values in initialize
+                if (probVar == null) {
+                    for (String key : initAssignments.keySet()) {
+                        if (key.contains("prob") && !key.contains("log")) {
+                            probVar = "state_" + key.replace("state_", "").replace("-", "_");
+                            break;
+                        }
+                    }
+                }
+
+                if (probVar == null) {
+                    System.out.println("No probability found in guards or aliases for propose*" + baseName);
+                    continue;
+                }
+                for (String proposeVal : proposeRule.valueMap.values()) {
+                    for (String applyGuard : applyRule.guards) {
+                        if (applyGuard.contains(proposeVal)) {
+                            matchedProposeVals.add(proposeVal);
+                            break;
+                        }
+                    }
+                }
+
+                if (matchedProposeVals.isEmpty()) continue;
+
+                System.out.println("Matched propose values (" + matchedProposeVals.size() + "): " + matchedProposeVals);
+
+                // 🔍 Dynamically determine target variable from applyRule.valueMap
+                if (applyRule.valueMap.size() != 1) {
+                    System.out.println("Skipping apply*" + baseName + " because it modifies multiple or no variables.");
+                    continue;
+                }
+
+                Map.Entry<String, String> entry = applyRule.valueMap.entrySet().iterator().next();
+                String targetVar = entry.getKey();
+                String targetVal = entry.getValue();
+                String fallbackVal = targetVal;
+
+                // Build guard and transition
+                String guard = proposeRule.formatGuard();
+
+                output.append("    [] ").append(guard).append(" -> ")
+                        .append(probVar).append(": (").append(targetVar).append("'=").append(targetVal).append(") \n" );
+//                + "+ ")
+//                        .append("state_stay_low_prob: (").append(targetVar).append("'=").append(fallbackVal).append(");\n");
+
+                System.out.println(" Merged: [] " + guard + " -> " +
+                        probVar + ": (" + targetVar + "'=" + targetVal + ") + state_stay_low_prob: (" + targetVar + "'=" + fallbackVal + ");");
             }
-
-            if (probVar == null) {
-                System.out.println("No probability found in guards or aliases for propose*" + baseName);
-                continue;
-            }
-
-            String ssqVal = applyRule.valueMap.get("state_ssq");
-            if (ssqVal == null) {
-                System.out.println("No state_ssq in apply*" + baseName);
-                continue;
-            }
-
-            String fallbackVal = getComplementValue(ssqVal);
-            String guard = proposeRule.formatGuard();
-
-            output.append("    [] ").append(guard).append(" -> ")
-                    .append(probVar).append(": (state_ssq'=").append(ssqVal).append(") + ")
-                    .append("state_stay_low_prob: (state_ssq'=").append(fallbackVal).append(");\n");
-
-            System.out.println(" Merged: [] " + guard + " -> " +
-                    probVar + ": (state_ssq'=" + ssqVal + ") + state_stay_low_prob: (state_ssq'=" + fallbackVal + ");");
         }
-
         return output.toString();
     }
 
 
     private String getComplementValue(String val) {
-        if (val.equals("1")) return "0";
-        if (val.equals("0")) return "1";
-        if (val.equals("true")) return "false";
-        if (val.equals("false")) return "true";
-        if (val.equals("yes")) return "no";
-        if (val.equals("no")) return "yes";
-        return val + "_alt"; // Fallback
+        return switch (val) {
+            case "1" -> "0";
+            case "0" -> "1";
+            case "true" -> "false";
+            case "false" -> "true";
+            case "yes" -> "no";
+            case "no" -> "yes";
+            default -> val + "_alt";
+        };
     }
 
 
@@ -204,12 +230,11 @@ public class Output {
             if(rules.mapNameToType.get(startNode) == Variable.INVALID){
                 continue;
             }
-            String node = startNode;
             int startNodeType = rules.mapNameToType.get(startNode);
             ArrayList<String> queue = new ArrayList<String>();
-            queue.add(node);
-            while(queue.size()>0){
-                String currentNode = queue.remove(0);
+            queue.add(startNode);
+            while(!queue.isEmpty()){
+                String currentNode = queue.removeFirst();
                 if(!rules.typeGraph.containsKey(currentNode)){
                     continue;
                 }

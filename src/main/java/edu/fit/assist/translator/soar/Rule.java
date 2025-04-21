@@ -3,6 +3,8 @@ package edu.fit.assist.translator.soar;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.ArrayList;
+import java.util.Map;
+
 public class Rule{
     String ruleName;
     HashMap<String, String> contextMap; // Example: Maps <s> to state or <o> to state_operator
@@ -27,96 +29,6 @@ public class Rule{
         this.groupedAssignments = new LinkedHashMap<>();
     }
 
-    public void populateDuplicate(Rule newRule){
-        for(String key : this.contextMap.keySet()){
-            newRule.addContext(key, this.contextMap.get(key));
-        }
-        for(String key : this.variableMap.keySet()){
-            newRule.variableMap.put(key, this.variableMap.get(key));
-        }
-        for(String key : this.valueMap.keySet()){
-            newRule.valueMap.put(key, this.valueMap.get(key));
-        }
-        for(String val : variables){
-            newRule.variables.add(val);
-        }
-        for(String val : guards){
-            newRule.guards.add(val);
-        }
-        newRule.isLearningRule = this.isLearningRule;
-        newRule.priority = this.priority;
-        newRule.isElaboration = this.isElaboration;
-    }
-
-
-    public void addJointAssignment(double prob, LinkedHashMap<String, String> updates) {
-        if (groupedAssignments == null) {
-            groupedAssignments = new LinkedHashMap<>();
-        }
-
-        ArrayList<String> assigns = new ArrayList<>();
-        for (String var : updates.keySet()) {
-            assigns.add(var + "'=" + updates.get(var));
-        }
-
-        groupedAssignments.put(prob, assigns);
-    }
-
-    public String formatRHS() {
-        if (groupedAssignments != null && !groupedAssignments.isEmpty()) {
-            StringBuilder rhs = new StringBuilder();
-            boolean first = true;
-
-            for (Double prob : groupedAssignments.keySet()) {
-                if (!first) rhs.append(" + ");
-                first = false;
-
-                ArrayList<String> assigns = groupedAssignments.get(prob);
-                rhs.append(prob).append(": (").append(String.join(") & (", assigns)).append(")");
-            }
-
-            return rhs.toString();
-        }
-
-        StringBuilder rhs = new StringBuilder();
-        boolean first = true;
-
-        for (String var : valueMap.keySet()) {
-            double prob = 1.0 / valueMap.size();
-            if (valueProbs != null && valueProbs.containsKey(var)) {
-                prob = valueProbs.get(var);
-            }
-
-            if (!first) rhs.append(" + ");
-            first = false;
-
-            rhs.append(prob).append(": (").append(var).append("'=").append(valueMap.get(var)).append(")");
-        }
-
-        if (rhs.length() == 0) {
-            rhs.append("1: true");
-        }
-
-        return rhs.toString();
-    }
-
-
-
-
-
-    public String listVariables(){
-        String output = "";
-        boolean first = true;
-        for(String var : variables){
-            if(!first){
-                output += ",";
-            }else{
-                first = false;
-            }
-            output += var;
-        }
-        return output;
-    }
 
     public String formatGuard(){
         String output = "";
