@@ -18,7 +18,7 @@ public class main{
             }else {
                 inputText = cleanText(Input.getSoarRules(debugPath));
             }
-//            System.out.println(inputText);
+            System.out.println(inputText);
 
             // Load Soar File
             ANTLRInputStream input = new ANTLRInputStream(inputText);
