@@ -263,10 +263,12 @@ public class Output {
             //var.generateType();
             if(var.varType== Variable.INVALID){
                 var.varType = Variable.S_CONST;
+
             }
 
 
             if(var.varType == Variable.S_CONST){
+                System.err.println(var.values);
             }else if(var.varType == Variable.INT){
                 output.append("const integer ");
                 List<Integer> filtered = var.values.stream()

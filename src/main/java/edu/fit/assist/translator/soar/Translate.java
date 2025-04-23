@@ -18,18 +18,32 @@ public class Translate {
         // Extract global constants from the apply*initialize rule.
         LinkedHashMap<String, String> globalConstants = extractGlobalConstants(rules);
 
-        // Emit dtmc header and constants (automatically converted).
         output.append("dtmc\n\n");
-        for (Map.Entry<String, String> entry : globalConstants.entrySet()) {
-            String prismVar = toPrismVariable(entry.getKey());
-            String val = entry.getValue();
-            // Distinguish between integers and doubles
-            if (val.matches("^-?\\d+$")) {
-                output.append("const integer ").append(prismVar).append(" = ").append(val).append(";\n");
-            } else {
-                output.append("const double ").append(prismVar).append(" = ").append(val).append(";\n");
+
+        for (Rule rule : rules.rules) {
+            if (rule.ruleName.startsWith("apply*")) {
+                collectAssignmentsFromApplyRule(rule);
             }
         }
+        Set<String> declaredStateVars = variableInitMap.keySet();
+
+        for (Map.Entry<String, String> entry : globalConstants.entrySet()) {
+            String key = entry.getKey();
+            String val = entry.getValue();
+
+            if (declaredStateVars.contains(key)) continue; // Skip if declared as a state variable
+
+            if (!val.matches("^-?\\d+(\\.\\d+)?$")) continue; // Skip non-numeric
+
+            String prismVar = toPrismVariable(key);
+
+            if (val.contains(".")) {
+                output.append("const double ").append(prismVar).append(" = ").append(val).append(";\n");
+            } else {
+                output.append("const int ").append(prismVar).append(" = ").append(val).append(";\n");
+            }
+        }
+
         output.append("\n");
 
         // Process propose rules, find matching apply rules, and group outcomes by guard.
@@ -59,7 +73,7 @@ public class Translate {
 
         // Construct the PRISM module using the grouped transitions.
         output.append("module user\n");
-
+        output.append(generateStateDeclarations());
         // For each guard, merge outcomes:
         for (Map.Entry<String, List<MergedTransition>> entry : transitionsByGuard.entrySet()) {
             String guard = entry.getKey();
@@ -117,5 +131,44 @@ public class Translate {
             conditions.add(plain);
         }
         return String.join(" & ", conditions);
+    }
+
+    private Map<String, Set<Integer>> variableValueMap = new HashMap<>();
+    private Map<String, Integer> variableInitMap = new HashMap<>();
+
+    // Call this for every apply rule
+    void collectAssignmentsFromApplyRule(Rule applyRule) {
+        for (Map.Entry<String, String> e : applyRule.valueMap.entrySet()) {
+            String key = e.getKey();
+            String val = e.getValue();
+
+            if (!val.matches("^-?\\d+$")) continue; // Only collect numeric vars
+
+            int intVal = Integer.parseInt(val);
+            variableValueMap.computeIfAbsent(key, k -> new TreeSet<>()).add(intVal);
+
+            // If this is from apply*initialize, store init val
+            if (applyRule.ruleName.equals("apply*initialize")) {
+                variableInitMap.put(key, intVal);
+            }
+        }
+    }
+
+    // After collecting all apply rules
+    String generateStateDeclarations() {
+        StringBuilder sb = new StringBuilder();
+        for (String key : variableValueMap.keySet()) {
+            Set<Integer> values = variableValueMap.get(key);
+            if (values.isEmpty()) continue;
+
+            int min = 0;
+            int max = Collections.max(values);
+            int init = variableInitMap.getOrDefault(key, 0);
+
+            String prismVar = key.replace("-", "_");
+            sb.append("    ").append(prismVar)
+                    .append(": [").append(min).append("..").append(max).append("] init ").append(init).append(";\n");
+        }
+        return sb.toString();
     }
 }
