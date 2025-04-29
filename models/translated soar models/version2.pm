@@ -18,7 +18,12 @@ const integer state_headset_h: [1..5] init 1;
 
 
 module user
-    [] state_superstate = nil & state_name = nil -> state_low_to_med_prob: (state_ssq'=0) + state_stay_low_prob: (state_ssq'=1);
-    [] state_gender = 1 & state_ssq = 0 & state_name = monitor & state_headset_h <= 5 & state_headset_h >= 1 -> state_low_to_med_prob: (state_ssq'=0) + state_stay_low_prob: (state_ssq'=1);
-    [] state_gender = 1 & state_ssq = 0 & state_name = monitor & state_headset_h <= 5 & state_headset_h >= 1 -> state_low_to_med_prob: (state_ssq'=1) + state_stay_low_prob: (state_ssq'=0);
+    [] state_superstate = nil 
+        & state_name = nil -> state_low_to_med_prob: (state_ssq'=1) + state_stay_low_prob: (state_ssq'=0);
+    [] state_gender = 1 
+        & state_ssq = 0 
+        & state_name = monitor 
+        & state_headset_h <= 5 
+        & state_headset_h >= 1 
+    -> state_low_to_med_prob: (state_ssq'=1) + state_stay_low_prob: (state_ssq'=0);
 endmodule
