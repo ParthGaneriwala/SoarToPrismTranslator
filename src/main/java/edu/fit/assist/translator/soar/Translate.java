@@ -133,8 +133,8 @@ public class Translate {
         return String.join(" & ", conditions);
     }
 
-    private Map<String, Set<Integer>> variableValueMap = new HashMap<>();
-    private Map<String, Integer> variableInitMap = new HashMap<>();
+    private final Map<String, Set<Integer>> variableValueMap = new HashMap<>();
+    private final Map<String, Integer> variableInitMap = new HashMap<>();
 
     // Call this for every apply rule
     void collectAssignmentsFromApplyRule(Rule applyRule) {
