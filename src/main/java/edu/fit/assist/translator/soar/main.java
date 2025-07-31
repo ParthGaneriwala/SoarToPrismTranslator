@@ -6,39 +6,45 @@ import java.io.*;
 import java.util.Scanner;
 
 public class main{
-    public static String debugPath = "D:\\FIT\\Github Projects -Parth\\ICS_SOAR\\load.soar";
+    public static String debugPath = "models/soar_models/load.soar";
 
     public static void main(String[] args){
         try{
-            // read soar agent into a string
+            String loadPath = (args.length > 0) ? args[0] : debugPath;
 
-            String inputText = "";
-            if(args.length > 0){
-                inputText = cleanText(Input.getSoarRules(args[0]));
-            }else {
-                inputText = cleanText(Input.getSoarRules(debugPath));
-            }
-            System.out.println(inputText);
+            // Read all Soar files recursively
+            String fullSoarText = Input.getSoarRules(loadPath);
+            String[] perRuleBlocks = fullSoarText.split("(?=sp\\s\\*\\s)"); // split by "sp *"
 
-            // Load Soar File
-            ANTLRInputStream input = new ANTLRInputStream(inputText);
-            // Create Lexer
-
-            SoarLexer lexer = new SoarLexer(input);
-            // Lex Soar file into Tokens
-            CommonTokenStream tokens = new CommonTokenStream(lexer);
-            // Create Parser
-            SoarParser parser = new SoarParser(tokens);
             Visitor visitor = new Visitor();
             visitor.rules = new SoarRules();
-            visitor.visit(parser.soar());
-//            Output outputFormatter = new Output(visitor.rules);
-//            String outputText = outputFormatter.generateOutput();
-//            System.out.println(outputText);
+
+            for (String ruleBlock : perRuleBlocks) {
+                try {
+                    ANTLRInputStream input = new ANTLRInputStream(ruleBlock);
+                    SoarLexer lexer = new SoarLexer(input);
+                    CommonTokenStream tokens = new CommonTokenStream(lexer);
+                    SoarParser parser = new SoarParser(tokens);
+                    SoarParser.SoarContext tree = parser.soar();
+
+                    if (tree == null) {
+                        System.err.println("warning: skipping rule block due to null tree:\n" + ruleBlock);
+                        continue;
+                    }
+
+                    visitor.visit(tree);
+
+                } catch (Exception e) {
+                    System.err.println("\n ERROR while processing rule:\n" + ruleBlock);
+                    e.printStackTrace();
+                }
+            }
+
+            // Translate to PRISM
             Translate translatorFormatter = new Translate(visitor.rules);
             String translatedText = translatorFormatter.translateSoarToPrismGeneral();
             System.out.println(translatedText);
-            PrintWriter pw = new PrintWriter(new File("output.pm"));
+            PrintWriter pw = new PrintWriter(new File("output1.pm"));
             pw.println(translatedText);
             pw.flush();
             pw.close();
@@ -46,7 +52,6 @@ public class main{
         }catch(Exception e){
             e.printStackTrace();
         }
-
     }
 
     public static String readInputFile(String path) throws FileNotFoundException{
