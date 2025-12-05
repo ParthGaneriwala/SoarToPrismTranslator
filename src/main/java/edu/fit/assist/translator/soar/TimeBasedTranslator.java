@@ -250,8 +250,11 @@ public class TimeBasedTranslator {
         output.append(generateTimeModule());
         output.append("\n");
         
-        // Generate action state module
-        output.append(generateActionStateModule());
+        // Extract transitions first (needed by action_state module)
+        List<TransitionInfo> transitions = extractTransitionRules();
+        
+        // Generate action state module (must be before transition modules)
+        output.append(generateActionStateModule(transitions));
         output.append("\n");
         
         // Generate sickness module
@@ -259,7 +262,7 @@ public class TimeBasedTranslator {
         output.append("\n");
         
         // Generate action transition modules
-        output.append(generateActionModules());
+        output.append(generateActionModules(transitions));
         output.append("\n");
         
         // Generate rewards
@@ -377,7 +380,7 @@ public class TimeBasedTranslator {
      * Generate action state module
      * Tracks the current action state (Scan-and-Select, Deciding, Decided)
      */
-    private String generateActionStateModule() {
+    private String generateActionStateModule(List<TransitionInfo> transitions) {
         StringBuilder sb = new StringBuilder();
         sb.append("module action_state\n");
         
@@ -400,8 +403,22 @@ public class TimeBasedTranslator {
         sb.append(String.format("  action : [0..3] init %d;\n", initAction));
         sb.append("\n");
         
-        // Default transition - action doesn't change unless explicitly modified by transition modules
-        sb.append("  [sync] true -> (action' = action);\n");
+        // Generate transitions for each action module - action_state listens for signals
+        for (TransitionInfo info : transitions) {
+            String moduleName = info.transitionName.toLowerCase() + "_transition";
+            sb.append(String.format("  [sync] %s_ing=1 -> (action' = %d);\n", moduleName, info.toAction));
+        }
+        sb.append("\n");
+        
+        // Else clause - keep action unchanged when no transition is active
+        StringBuilder elseGuard = new StringBuilder();
+        for (int i = 0; i < transitions.size(); i++) {
+            if (i > 0) elseGuard.append(" & ");
+            String moduleName = transitions.get(i).transitionName.toLowerCase() + "_transition";
+            elseGuard.append(String.format("!(%s_ing=1)", moduleName));
+        }
+        
+        sb.append(String.format("  [sync] %s -> (action' = action);\n", elseGuard.toString()));
         
         sb.append("endmodule\n");
         return sb.toString();
@@ -470,11 +487,8 @@ public class TimeBasedTranslator {
      * Generate action modules based on Soar transition rules
      * Extracts SS-transition, D-transition, DD-transition modules
      */
-    private String generateActionModules() {
+    private String generateActionModules(List<TransitionInfo> transitions) {
         StringBuilder sb = new StringBuilder();
-        
-        // Find transition rules and generate modules
-        List<TransitionInfo> transitions = extractTransitionRules();
         
         if (transitions.isEmpty()) {
             sb.append("// No action transition modules found in Soar rules\n");
@@ -664,16 +678,16 @@ public class TimeBasedTranslator {
             
             if (pdfValue > 0) {
                 sb.append(String.format("  [sync] %s_ing=1 ->\n", moduleName));
-                sb.append(String.format("    %.6f : (%s_done' = 1) & (%s_ing' = 0) & (action' = %d)\n",
-                    pdfValue, moduleName, moduleName, info.toAction));
+                sb.append(String.format("    %.6f : (%s_done' = 1) & (%s_ing' = 0)\n",
+                    pdfValue, moduleName, moduleName));
                 sb.append(String.format("  + %.6f : (%s_ing' = 0);\n", 1.0 - pdfValue, moduleName));
                 sb.append("\n");
             }
         } else {
             // Deterministic transition
             sb.append(String.format("  [sync] %s_ing=1 ->\n", moduleName));
-            sb.append(String.format("    (%s_done' = 1) & (%s_ing' = 0) & (action' = %d);\n",
-                moduleName, moduleName, info.toAction));
+            sb.append(String.format("    (%s_done' = 1) & (%s_ing' = 0);\n",
+                moduleName, moduleName));
             sb.append("\n");
         }
         
