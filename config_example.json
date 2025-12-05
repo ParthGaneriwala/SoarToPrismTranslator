@@ -1,0 +1,130 @@
+{
+  "model": {
+    "type": "dtmc",
+    "maxErrorCount": 5,
+    "modelResolution": 1.0,
+    "experimentDuration": 1200,
+    "sicknessSamplingInterval": 300,
+    "sicknessLevels": 2,
+    "responseDuration": 60
+  },
+  "constants": {
+    "mission_monitor": 0,
+    "sickness_monitor": 1,
+    "pdf1": 0.9
+  },
+  "sicknessProbabilityTable": {
+    "0,0,0": 0.9,
+    "0,0,1": 0.1,
+    "0,1,1": 1.0,
+    "300,0,0": 0.9,
+    "300,0,1": 0.1,
+    "300,1,1": 1.0,
+    "600,0,0": 0.9,
+    "600,0,1": 0.1,
+    "600,1,1": 1.0,
+    "900,0,0": 0.9,
+    "900,0,1": 0.1,
+    "900,1,1": 1.0,
+    "1200,0,0": 0.9,
+    "1200,0,1": 0.1,
+    "1200,1,1": 1.0
+  },
+  "responseSelect": {
+    "sickness0": {
+      "type": "discrete",
+      "states": 61,
+      "probabilities": [
+        {"state": 0, "probability": 0.048770575499285984},
+        {"state": 1, "probability": 0.0463920064647545}
+      ]
+    },
+    "sickness1": {
+      "type": "discrete", 
+      "states": 61,
+      "probabilities": [
+        {"state": 0, "probability": 0.009950166250831893},
+        {"state": 1, "probability": 0.009851160442412854}
+      ]
+    }
+  },
+  "responseDecide": {
+    "sickness0": {
+      "type": "discrete",
+      "states": 61,
+      "probabilities": [
+        {"state": 0, "probability": 0.019801326693244747},
+        {"state": 1, "probability": 0.019409234154432076}
+      ]
+    },
+    "sickness1": {
+      "type": "discrete",
+      "states": 61,
+      "probabilities": [
+        {"state": 0, "probability": 0.009950166250831893},
+        {"state": 1, "probability": 0.009851160442412854}
+      ]
+    }
+  },
+  "decisionErrorDistributions": {
+    "sickness0": {
+      "correctProbability": 0.999,
+      "errorProbability": 0.001
+    },
+    "sickness1": {
+      "correctProbability": 0.998,
+      "errorProbability": 0.002
+    }
+  },
+  "modules": [
+    {
+      "name": "time",
+      "type": "time_counter",
+      "variables": [
+        {
+          "name": "time_counter",
+          "type": "int",
+          "range": "[0..TOTAL_TIME]",
+          "init": 0
+        }
+      ]
+    },
+    {
+      "name": "sickness",
+      "type": "state_machine",
+      "soarRulePatterns": [
+        ".*sickness.*",
+        ".*notsick.*",
+        ".*sick.*",
+        "propose\\*check\\*.*",
+        "apply\\*check\\*.*"
+      ],
+      "variables": [
+        {
+          "name": "name",
+          "type": "int",
+          "range": "[0..1]",
+          "init": "mission_monitor"
+        },
+        {
+          "name": "sick",
+          "type": "int",
+          "range": "[0..1]",
+          "init": 0
+        },
+        {
+          "name": "ts",
+          "type": "int",
+          "range": "[0..1]",
+          "init": 0
+        },
+        {
+          "name": "sickness_checked",
+          "type": "int",
+          "range": "[0..1]",
+          "init": 0
+        }
+      ]
+    }
+  ]
+}

@@ -11,6 +11,7 @@ public class main{
     public static void main(String[] args){
         try{
             String loadPath = (args.length > 0) ? args[0] : debugPath;
+            String configPath = (args.length > 1) ? args[1] : null;
 
             // Read all Soar files recursively
             String fullSoarText = Input.getSoarRules(loadPath);
@@ -46,7 +47,13 @@ public class main{
             String translatedText;
             if (isTimeBasedModel) {
                 // Use TimeBasedTranslator for time-window models
-                TimeBasedTranslator timeTranslator = new TimeBasedTranslator(visitor.rules);
+                TimeBasedTranslator timeTranslator;
+                if (configPath != null) {
+                    System.err.println("INFO: Using configuration file: " + configPath);
+                    timeTranslator = new TimeBasedTranslator(visitor.rules, configPath);
+                } else {
+                    timeTranslator = new TimeBasedTranslator(visitor.rules);
+                }
                 translatedText = timeTranslator.translateToTimeBased();
             } else {
                 // Use general translator

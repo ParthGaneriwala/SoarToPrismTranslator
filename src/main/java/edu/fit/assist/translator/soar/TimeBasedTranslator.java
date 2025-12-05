@@ -1,5 +1,6 @@
 package edu.fit.assist.translator.soar;
 
+import java.io.IOException;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -12,13 +13,19 @@ import java.util.stream.Collectors;
  * - Window-based sampling (e.g., sickness checks at specific time windows)
  * - Probabilistic state transitions
  * - Synchronized module interactions
+ * 
+ * Can optionally use external configuration file for:
+ * - Module definitions and mappings
+ * - PDF values and constants
+ * - Time windows and intervals
  */
 public class TimeBasedTranslator {
     private SoarRules rules;
     private int totalTime = 1200;
     private List<Integer> timeWindows = new ArrayList<>();
     private List<Integer> commitTimes = new ArrayList<>();
-    private Map<String, String> constantValues = new LinkedHashMap<>();
+    private Map<String, Object> constantValues = new LinkedHashMap<>();
+    private PrismConfig config = null;
     
     // Module constants
     private static final int MISSION_MONITOR = 0;
@@ -30,11 +37,39 @@ public class TimeBasedTranslator {
     }
     
     /**
+     * Constructor with external configuration file
+     */
+    public TimeBasedTranslator(SoarRules rules, String configPath) {
+        this.rules = rules;
+        try {
+            this.config = PrismConfig.loadFromFile(configPath);
+            if (config != null) {
+                // Use config values to override defaults
+                totalTime = config.getTotalTime();
+                constantValues.putAll(config.getConstants());
+            }
+        } catch (IOException e) {
+            System.err.println("Warning: Could not load config file " + configPath + ": " + e.getMessage());
+            System.err.println("Falling back to rule-based extraction");
+        }
+        extractConfiguration();
+    }
+    
+    /**
      * Extract configuration from initialize and other rules
      */
     private void extractConfiguration() {
         Integer timeInterval = null;
         
+        // If we have a config, use its values
+        if (config != null) {
+            timeInterval = config.getSicknessSamplingInterval();
+            timeWindows = config.getTimeWindows();
+            commitTimes = config.getCommitTimes();
+            return; // Config provides everything we need
+        }
+        
+        // Otherwise extract from rules
         for (Rule rule : rules.rules) {
             if (rule.ruleName.equals("apply*initialize")) {
                 // Extract total time
@@ -48,7 +83,9 @@ public class TimeBasedTranslator {
                 }
                 
                 // Store all initialization values as constants
-                constantValues.putAll(rule.valueMap);
+                for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
+                    constantValues.put(entry.getKey(), entry.getValue());
+                }
             }
             
             // Look for time-interval in elaborate rules
@@ -226,22 +263,41 @@ public class TimeBasedTranslator {
     private String generateConstants() {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("const int TOTAL_TIME = %d;\n", totalTime));
-        sb.append(String.format("const int mission_monitor  = %d;\n", MISSION_MONITOR));
-        sb.append(String.format("const int sickness_monitor = %d;\n\n", SICKNESS_MONITOR));
         
-        // Add probability constants - look for pdf1 or sick_thres
-        // pdf1 is typically 0.9 (probability of staying healthy)
-        double pdf1 = findProbabilityValue("pdf1", 0.9);
-        if (pdf1 == 0.9) {
-            // If pdf1 not found, try using complement of sick_thres
-            double sickThres = findProbabilityValue("sick_thres", 0.5);
-            if (sickThres != 0.5) {
-                // sick_thres is a threshold, pdf1 would be complement
-                pdf1 = 1.0 - sickThres;
+        // Generate constants from config if available
+        if (config != null && !config.getConstants().isEmpty()) {
+            for (Map.Entry<String, Object> entry : config.getConstants().entrySet()) {
+                String name = entry.getKey();
+                Object value = entry.getValue();
+                
+                if (value instanceof Double || value instanceof Float) {
+                    sb.append(String.format("const double %s = %.2f;\n", name, ((Number)value).doubleValue()));
+                } else if (value instanceof Integer || value instanceof Long) {
+                    sb.append(String.format("const int %s = %d;\n", name, ((Number)value).intValue()));
+                } else {
+                    sb.append(String.format("const %s = %s;\n", name, value));
+                }
             }
+        } else {
+            // Fallback to default constants
+            sb.append(String.format("const int mission_monitor  = %d;\n", MISSION_MONITOR));
+            sb.append(String.format("const int sickness_monitor = %d;\n", SICKNESS_MONITOR));
+            
+            // Add probability constants - look for pdf1 or sick_thres
+            // pdf1 is typically 0.9 (probability of staying healthy)
+            double pdf1 = findProbabilityValue("pdf1", 0.9);
+            if (pdf1 == 0.9) {
+                // If pdf1 not found, try using complement of sick_thres
+                double sickThres = findProbabilityValue("sick_thres", 0.5);
+                if (sickThres != 0.5) {
+                    // sick_thres is a threshold, pdf1 would be complement
+                    pdf1 = 1.0 - sickThres;
+                }
+            }
+            sb.append(String.format("const double pdf1 = %.2f;\n", pdf1));
         }
-        sb.append(String.format("const double pdf1 = %.2f;\n", pdf1));
         
+        sb.append("\n");
         return sb.toString();
     }
     
@@ -344,15 +400,19 @@ public class TimeBasedTranslator {
     }
     
     /**
-     * Find a probability value from the rules
+     * Find a probability value from the rules or config
      */
     private double findProbabilityValue(String probName, double defaultValue) {
-        // Check constant values first
+        // Check constant values first (from config)
         if (constantValues.containsKey(probName)) {
+            Object value = constantValues.get(probName);
+            if (value instanceof Number) {
+                return ((Number)value).doubleValue();
+            }
             try {
-                return Double.parseDouble(constantValues.get(probName));
+                return Double.parseDouble(value.toString());
             } catch (NumberFormatException e) {
-                System.err.println("Could not parse " + probName + ": " + constantValues.get(probName));
+                System.err.println("Could not parse " + probName + ": " + value);
             }
         }
         
