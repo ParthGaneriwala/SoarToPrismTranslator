@@ -14,6 +14,12 @@ module time
   [sync] time_counter =  TOTAL_TIME -> (time_counter' = time_counter);
 endmodule
 
+module action_state
+  action : [0..3] init 3;
+
+  [sync] true -> (action' = action);
+endmodule
+
 module sickness
   name             : [0..1] init mission_monitor;
   sick             : [0..1] init 0;
@@ -74,12 +80,51 @@ module sickness
     (sick' = sick) & (ts' = ts) & (sickness_checked' = sickness_checked) & (name' = name);
 endmodule
 
-// Additional action modules can be generated here
-// Examples based on Soar rules:
-// - SS-transition module
-// - D-transition module
-// - DD-transition module
-// - error detection module
+module ss_transition
+  ss_transition_done : [0..1] init 0;
+  ss_transition_ing  : [0..1] init 0;
+
+  [sync] ss_transition_ing=1 ->
+    (ss_transition_done' = 1) & (ss_transition_ing' = 0) & (action' = 0);
+
+  [sync] ss_transition_done=1 -> (ss_transition_done' = 0);
+
+  [sync] !(ss_transition_done=1) & !(ss_transition_ing=1) & !(time_counter < TOTAL_TIME & true & ss_transition_done=0 & ss_transition_ing=0) ->
+    (ss_transition_done' = ss_transition_done) & (ss_transition_ing' = ss_transition_ing);
+endmodule
+
+module d_transition
+  d_transition_done : [0..1] init 0;
+  d_transition_ing  : [0..1] init 0;
+
+  [sync] time_counter < TOTAL_TIME & action=0 & d_transition_done=0 & d_transition_ing=0 ->
+    (d_transition_ing' = 1);
+
+  [sync] d_transition_ing=1 ->
+    (d_transition_done' = 1) & (d_transition_ing' = 0) & (action' = 1);
+
+  [sync] d_transition_done=1 -> (d_transition_done' = 0);
+
+  [sync] !(d_transition_done=1) & !(d_transition_ing=1) & !(time_counter < TOTAL_TIME & action=0 & d_transition_done=0 & d_transition_ing=0) ->
+    (d_transition_done' = d_transition_done) & (d_transition_ing' = d_transition_ing);
+endmodule
+
+module dd_transition
+  dd_transition_done : [0..1] init 0;
+  dd_transition_ing  : [0..1] init 0;
+
+  [sync] time_counter < TOTAL_TIME & action=1 & dd_transition_done=0 & dd_transition_ing=0 ->
+    (dd_transition_ing' = 1);
+
+  [sync] dd_transition_ing=1 ->
+    (dd_transition_done' = 1) & (dd_transition_ing' = 0) & (action' = 2);
+
+  [sync] dd_transition_done=1 -> (dd_transition_done' = 0);
+
+  [sync] !(dd_transition_done=1) & !(dd_transition_ing=1) & !(time_counter < TOTAL_TIME & action=1 & dd_transition_done=0 & dd_transition_ing=0) ->
+    (dd_transition_done' = dd_transition_done) & (dd_transition_ing' = dd_transition_ing);
+endmodule
+
 
 // Reward structures can be added here
 // Example:

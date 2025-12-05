@@ -250,11 +250,15 @@ public class TimeBasedTranslator {
         output.append(generateTimeModule());
         output.append("\n");
         
+        // Generate action state module
+        output.append(generateActionStateModule());
+        output.append("\n");
+        
         // Generate sickness module
         output.append(generateSicknessModule());
         output.append("\n");
         
-        // Generate action modules
+        // Generate action transition modules
         output.append(generateActionModules());
         output.append("\n");
         
@@ -370,6 +374,40 @@ public class TimeBasedTranslator {
     }
     
     /**
+     * Generate action state module
+     * Tracks the current action state (Scan-and-Select, Deciding, Decided)
+     */
+    private String generateActionStateModule() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("module action_state\n");
+        
+        // Extract initial action value from initialize rule
+        int initAction = 3; // default from Soar code
+        for (Rule rule : rules.rules) {
+            if (rule.ruleName.equals("apply*initialize")) {
+                String actionVal = rule.valueMap.get("action");
+                if (actionVal != null) {
+                    try {
+                        initAction = Integer.parseInt(actionVal);
+                    } catch (NumberFormatException e) {
+                        // Use default
+                    }
+                }
+            }
+        }
+        
+        // Action: 0=Deciding, 1=Decided, 2=Scan-and-Select (from DD), 3=Scan-and-Select (initial)
+        sb.append(String.format("  action : [0..3] init %d;\n", initAction));
+        sb.append("\n");
+        
+        // Default transition - action doesn't change unless explicitly modified by transition modules
+        sb.append("  [sync] true -> (action' = action);\n");
+        
+        sb.append("endmodule\n");
+        return sb.toString();
+    }
+    
+    /**
      * Generate the sickness monitoring module
      */
     private String generateSicknessModule() {
@@ -428,17 +466,243 @@ public class TimeBasedTranslator {
     /**
      * Generate action modules (placeholder for extensibility)
      */
+    /**
+     * Generate action modules based on Soar transition rules
+     * Extracts SS-transition, D-transition, DD-transition modules
+     */
     private String generateActionModules() {
         StringBuilder sb = new StringBuilder();
         
-        sb.append("// Additional action modules can be generated here\n");
-        sb.append("// Examples based on Soar rules:\n");
-        sb.append("// - SS-transition module\n");
-        sb.append("// - D-transition module\n");
-        sb.append("// - DD-transition module\n");
-        sb.append("// - error detection module\n");
+        // Find transition rules and generate modules
+        List<TransitionInfo> transitions = extractTransitionRules();
+        
+        if (transitions.isEmpty()) {
+            sb.append("// No action transition modules found in Soar rules\n");
+            return sb.toString();
+        }
+        
+        // Generate a module for each unique transition type
+        for (TransitionInfo transition : transitions) {
+            sb.append(generateTransitionModule(transition));
+            sb.append("\n");
+        }
         
         return sb.toString();
+    }
+    
+    /**
+     * Extract transition information from Soar rules
+     */
+    private List<TransitionInfo> extractTransitionRules() {
+        List<TransitionInfo> transitions = new ArrayList<>();
+        
+        for (Rule rule : rules.rules) {
+            // Look for apply* transition rules
+            if (rule.ruleName.startsWith("apply*apply-") && rule.ruleName.contains("-transition")) {
+                TransitionInfo info = new TransitionInfo();
+                info.ruleName = rule.ruleName;
+                
+                // Extract transition name (e.g., "SS", "D", "DD")
+                String transName = rule.ruleName.replace("apply*apply-", "").replace("-transition", "");
+                info.transitionName = transName;
+                
+                // Extract TO action value from RHS lines
+                // Look for pattern like "(<s> ^action 0 +)"
+                for (String rhsLine : rule.rhsLines) {
+                    if (rhsLine.contains("action") && rhsLine.contains("+") && !rhsLine.contains("-")) {
+                        // Extract the action value
+                        // Pattern: "(<s> ^action 0 +)" or similar
+                        String cleaned = rhsLine.replaceAll("[<>()^+\\s]", " ").trim();
+                        String[] parts = cleaned.split("\\s+");
+                        for (int i = 0; i < parts.length; i++) {
+                            if (parts[i].equals("action") && i + 1 < parts.length) {
+                                try {
+                                    info.toAction = Integer.parseInt(parts[i + 1]);
+                                    break;
+                                } catch (NumberFormatException e) {
+                                    // Not a number, continue
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // If still not found, try valueMap
+                if (info.toAction < 0 && rule.valueMap.containsKey("action")) {
+                    try {
+                        info.toAction = Integer.parseInt(rule.valueMap.get("action"));
+                    } catch (NumberFormatException e) {
+                        System.err.println("Could not parse action value: " + rule.valueMap.get("action"));
+                    }
+                }
+                
+                // Fallback: infer from transition name based on common patterns
+                if (info.toAction < 0) {
+                    if (transName.equals("SS")) {
+                        info.toAction = 0; // SS -> Deciding (action 0)
+                    } else if (transName.equals("D")) {
+                        info.toAction = 1; // D -> Decided (action 1)
+                    } else if (transName.equals("DD")) {
+                        info.toAction = 2; // DD -> Scan-and-Select (action 2)
+                    }
+                }
+                
+                // Find corresponding propose rule to get FROM action
+                String proposeRuleName = "propose*" + transName + "-transition";
+                for (Rule proposeRule : rules.rules) {
+                    if (proposeRule.ruleName.equals(proposeRuleName)) {
+                        // Extract FROM action from guards
+                        for (String guard : proposeRule.guards) {
+                            if (guard.contains("action")) {
+                                // Parse guards like "action = 0" or "action { << 3 2 >> }"
+                                if (guard.contains("<<")) {
+                                    // Multiple values like "action { << 3 2 >> }"
+                                    String actionPart = guard.substring(guard.indexOf("<<") + 2, guard.indexOf(">>"));
+                                    String[] actions = actionPart.trim().split("\\s+");
+                                    info.fromActions = new ArrayList<>();
+                                    for (String a : actions) {
+                                        try {
+                                            info.fromActions.add(Integer.parseInt(a));
+                                        } catch (NumberFormatException e) {
+                                            // Ignore
+                                        }
+                                    }
+                                } else if (guard.contains("=")) {
+                                    // Single value like "action = 0"
+                                    String[] parts = guard.split("=");
+                                    if (parts.length > 1) {
+                                        try {
+                                            info.fromAction = Integer.parseInt(parts[1].trim());
+                                        } catch (NumberFormatException e) {
+                                            // Ignore
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Extract PDF value from input-link references
+                        // Look for patterns like "(<sd> ^pdf2 <pdf2>)" in conditions
+                        for (String var : proposeRule.variables) {
+                            if (var.startsWith("pdf")) {
+                                info.pdfName = var;
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Extract event name from RHS lines
+                for (String rhsLine : rule.rhsLines) {
+                    if (rhsLine.contains("event") && rhsLine.contains("+") && !rhsLine.contains("-")) {
+                        // Extract event value  
+                        // Pattern: "(<out> ^event Deciding +)" or similar
+                        String cleaned = rhsLine.replaceAll("[<>()^+]", " ").trim();
+                        String[] parts = cleaned.split("\\s+");
+                        for (int i = 0; i < parts.length; i++) {
+                            if (parts[i].equals("event") && i + 1 < parts.length) {
+                                info.eventName = parts[i + 1];
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                transitions.add(info);
+            }
+        }
+        
+        return transitions;
+    }
+    
+    /**
+     * Generate a PRISM module for a transition
+     */
+    private String generateTransitionModule(TransitionInfo info) {
+        StringBuilder sb = new StringBuilder();
+        
+        // Module name based on transition
+        String moduleName = info.transitionName.toLowerCase() + "_transition";
+        
+        sb.append(String.format("module %s\n", moduleName));
+        sb.append(String.format("  %s_done : [0..1] init 0;\n", moduleName));
+        sb.append(String.format("  %s_ing  : [0..1] init 0;\n", moduleName));
+        sb.append("\n");
+        
+        // Generate transition rules
+        // Guard: action matches from state, not done, not in progress
+        String actionGuard = "";
+        if (info.fromActions != null && !info.fromActions.isEmpty()) {
+            // Multiple source actions (e.g., action=3 or action=2 for SS)
+            List<String> actionParts = new ArrayList<>();
+            for (int action : info.fromActions) {
+                actionParts.add("action=" + action);
+            }
+            actionGuard = "(" + String.join(" | ", actionParts) + ")";
+        } else if (info.fromAction >= 0) {
+            actionGuard = "action=" + info.fromAction;
+        }
+        
+        // Start transition
+        if (!actionGuard.isEmpty()) {
+            sb.append(String.format("  [sync] time_counter < TOTAL_TIME & %s & %s_done=0 & %s_ing=0 ->\n",
+                actionGuard, moduleName, moduleName));
+            sb.append(String.format("    (%s_ing' = 1);\n", moduleName));
+            sb.append("\n");
+        }
+        
+        // Complete transition (probabilistic if PDF available)
+        if (info.pdfName != null && !info.pdfName.isEmpty()) {
+            // Look up PDF value
+            double pdfValue = findProbabilityValue(info.pdfName, -1.0);
+            if (pdfValue < 0 && config != null && config.getConstants().containsKey(info.pdfName)) {
+                Object pdfObj = config.getConstants().get(info.pdfName);
+                if (pdfObj instanceof Number) {
+                    pdfValue = ((Number)pdfObj).doubleValue();
+                }
+            }
+            
+            if (pdfValue > 0) {
+                sb.append(String.format("  [sync] %s_ing=1 ->\n", moduleName));
+                sb.append(String.format("    %.6f : (%s_done' = 1) & (%s_ing' = 0) & (action' = %d)\n",
+                    pdfValue, moduleName, moduleName, info.toAction));
+                sb.append(String.format("  + %.6f : (%s_ing' = 0);\n", 1.0 - pdfValue, moduleName));
+                sb.append("\n");
+            }
+        } else {
+            // Deterministic transition
+            sb.append(String.format("  [sync] %s_ing=1 ->\n", moduleName));
+            sb.append(String.format("    (%s_done' = 1) & (%s_ing' = 0) & (action' = %d);\n",
+                moduleName, moduleName, info.toAction));
+            sb.append("\n");
+        }
+        
+        // Reset done flag
+        sb.append(String.format("  [sync] %s_done=1 -> (%s_done' = 0);\n", moduleName, moduleName));
+        sb.append("\n");
+        
+        // Else clause - no change
+        sb.append(String.format("  [sync] !(%s_done=1) & !(%s_ing=1) & !(time_counter < TOTAL_TIME & %s & %s_done=0 & %s_ing=0) ->\n",
+            moduleName, moduleName, actionGuard.isEmpty() ? "true" : actionGuard, moduleName, moduleName));
+        sb.append(String.format("    (%s_done' = %s_done) & (%s_ing' = %s_ing);\n",
+            moduleName, moduleName, moduleName, moduleName));
+        
+        sb.append("endmodule\n");
+        
+        return sb.toString();
+    }
+    
+    /**
+     * Helper class to store transition information
+     */
+    private static class TransitionInfo {
+        String ruleName;
+        String transitionName;
+        int fromAction = -1;
+        List<Integer> fromActions = null;
+        int toAction = -1;
+        String eventName;
+        String pdfName;
     }
     
     /**
