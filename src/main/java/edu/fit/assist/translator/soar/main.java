@@ -46,12 +46,10 @@ public class main{
             String translatedText;
             if (isTimeBasedModel) {
                 // Use TimeBasedTranslator for time-window models
-                System.out.println("// Detected time-based model, using TimeBasedTranslator");
                 TimeBasedTranslator timeTranslator = new TimeBasedTranslator(visitor.rules);
                 translatedText = timeTranslator.translateToTimeBased();
             } else {
                 // Use general translator
-                System.out.println("// Using general translator");
                 Translate translatorFormatter = new Translate(visitor.rules);
                 translatedText = translatorFormatter.translateSoarToPrismGeneral();
             }

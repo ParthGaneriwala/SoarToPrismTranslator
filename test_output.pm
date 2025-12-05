@@ -6,7 +6,7 @@ const int TOTAL_TIME = 1200;
 const int mission_monitor  = 0;
 const int sickness_monitor = 1;
 
-const double pdf1 = 0.50;
+const double pdf1 = 0.90;
 
 module time
   time_counter : [0..TOTAL_TIME] init 0;

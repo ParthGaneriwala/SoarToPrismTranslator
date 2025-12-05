@@ -50,26 +50,9 @@ public class TimeBasedTranslator {
             }
         }
         
-        // Infer time windows from the Soar rules
-        // Look for rules that reference time-counter values
-        Set<Integer> windowSet = new TreeSet<>();
-        Set<Integer> commitSet = new TreeSet<>();
-        
-        for (Rule rule : rules.rules) {
-            // Check guards for time-based conditions
-            for (String guard : rule.guards) {
-                // This is simplified - in real implementation, parse time values from guards
-            }
-        }
-        
-        // Default windows if not found
-        if (windowSet.isEmpty()) {
-            windowSet.addAll(Arrays.asList(0, 300, 600, 900, 1200));
-            commitSet.addAll(Arrays.asList(299, 599, 899, 1199));
-        }
-        
-        timeWindows = new ArrayList<>(windowSet);
-        commitTimes = new ArrayList<>(commitSet);
+        // Default windows - could be enhanced to infer from rules in future
+        timeWindows = Arrays.asList(0, 300, 600, 900, 1200);
+        commitTimes = Arrays.asList(299, 599, 899, 1199);
     }
     
     /**
@@ -113,8 +96,17 @@ public class TimeBasedTranslator {
         sb.append(String.format("const int mission_monitor  = %d;\n", MISSION_MONITOR));
         sb.append(String.format("const int sickness_monitor = %d;\n\n", SICKNESS_MONITOR));
         
-        // Add probability constants
-        double pdf1 = findProbabilityValue("sick_thres", 0.9);
+        // Add probability constants - look for pdf1 or sick_thres
+        // pdf1 is typically 0.9 (probability of staying healthy)
+        double pdf1 = findProbabilityValue("pdf1", 0.9);
+        if (pdf1 == 0.9) {
+            // If pdf1 not found, try using complement of sick_thres
+            double sickThres = findProbabilityValue("sick_thres", 0.5);
+            if (sickThres != 0.5) {
+                // sick_thres is a threshold, pdf1 would be complement
+                pdf1 = 1.0 - sickThres;
+            }
+        }
         sb.append(String.format("const double pdf1 = %.2f;\n", pdf1));
         
         return sb.toString();
