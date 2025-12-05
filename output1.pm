@@ -1,28 +1,89 @@
 dtmc
+//PRISM model generated from Soar cognitive model
+//Total time: 1200
 
-global phase : [0..1] init 0;      // 0 = propose, 1 = apply
-global state_name : [0..2] init 0;
-global state_start_mission : bool init false;
-global state_sick_thres : [0..2] init 0;
-global state_sickness_checked : bool init false;
-global state_sickness_time_interval_set : bool init false;
-global state_io_sick : [0..2] init 0;
-global state_io_event : [0..2] init 0;
-global state_io_check_done : bool init false;
-global state_sick : [0..0] init 0;
-global state_time_counter : [0..1] init 1;
-global state_total_time : [0..1200] init 1200;
-global state_io_current_time : [0..1] init 1;
-global state_io_total_time : [0..1200] init 1200;
-global state_action : [0..3] init 3;
-global state_operator_name : [0..4] init 0;
+const int TOTAL_TIME = 1200;
+const int sickness_monitor = 1;
+const int mission_monitor  = 0;
+const double pdf1 = 0.90;
 
-module user
-    [] phase=0 & state_name=0 & state_sickness_time_interval_set = true & state_start_mission = true & state_time_counter < state_total_time -> 1.0 : (state_operator_name' = 1) & (phase' = 1);
 
-// Apply transitions
+module time
+  time_counter : [0..TOTAL_TIME] init 0;
+  [sync] time_counter <  TOTAL_TIME -> (time_counter' = time_counter + 1);
+  [sync] time_counter =  TOTAL_TIME -> (time_counter' = time_counter);
 endmodule
 
-// Operator mappings: 
-// 0 = initialize, 1 = SS-transition
+module sickness
+  name             : [0..1] init mission_monitor;
+  sick             : [0..1] init 0;
+  ts               : [0..1] init 0;
+  sickness_checked : [0..1] init 0;
+
+  // ---- commit at window end ----
+  [sync] time_counter =  299 -> (sick' = ts);
+  [sync] time_counter =  599 -> (sick' = ts);
+  [sync] time_counter =  899 -> (sick' = ts);
+  [sync] time_counter = 1199 -> (sick' = ts);
+
+  // ---- sample at window start (one check per visit) ----
+  [sync] time_counter =    0 & name=sickness_monitor & sickness_checked=0 & sick=0 ->
+        pdf1     : (ts'=0) & (sickness_checked'=1)
+      + (1-pdf1) : (ts'=1) & (sickness_checked'=1);
+  [sync] time_counter =    0 & name=sickness_monitor & sickness_checked=0 & sick=1 ->
+        1 : (ts'=1) & (sickness_checked'=1);
+
+  [sync] time_counter =  300 & name=sickness_monitor & sickness_checked=0 & sick=0 ->
+        pdf1     : (ts'=0) & (sickness_checked'=1)
+      + (1-pdf1) : (ts'=1) & (sickness_checked'=1);
+  [sync] time_counter =  300 & name=sickness_monitor & sickness_checked=0 & sick=1 ->
+        1 : (ts'=1) & (sickness_checked'=1);
+
+  [sync] time_counter =  600 & name=sickness_monitor & sickness_checked=0 & sick=0 ->
+        pdf1     : (ts'=0) & (sickness_checked'=1)
+      + (1-pdf1) : (ts'=1) & (sickness_checked'=1);
+  [sync] time_counter =  600 & name=sickness_monitor & sickness_checked=0 & sick=1 ->
+        1 : (ts'=1) & (sickness_checked'=1);
+
+  [sync] time_counter =  900 & name=sickness_monitor & sickness_checked=0 & sick=0 ->
+        pdf1     : (ts'=0) & (sickness_checked'=1)
+      + (1-pdf1) : (ts'=1) & (sickness_checked'=1);
+  [sync] time_counter =  900 & name=sickness_monitor & sickness_checked=0 & sick=1 ->
+        1 : (ts'=1) & (sickness_checked'=1);
+
+  [sync] time_counter = 1200 & name=sickness_monitor & sickness_checked=0 & sick=0 ->
+        pdf1     : (ts'=0) & (sickness_checked'=1)
+      + (1-pdf1) : (ts'=1) & (sickness_checked'=1);
+  [sync] time_counter = 1200 & name=sickness_monitor & sickness_checked=0 & sick=1 ->
+        1 : (ts'=1) & (sickness_checked'=1);
+
+  [sync] name = sickness_monitor & sickness_checked = 1 &
+  time_counter != 0   & time_counter != 300 & time_counter != 600 &
+  time_counter != 900 & time_counter != 1200 &
+  time_counter != 299 & time_counter != 599 &
+  time_counter != 899 & time_counter != 1199
+->
+  (name' = mission_monitor) & (sickness_checked' = 0);
+
+  [sync]
+    time_counter != 299 & time_counter != 599 & time_counter != 899 & time_counter != 1199 &
+    !((time_counter =    0 | time_counter =  300 | time_counter =  600 | time_counter =  900 | time_counter = 1200) &
+      name = sickness_monitor & sickness_checked = 0) &
+    !(name = sickness_monitor & sickness_checked = 1)
+  ->
+    (sick' = sick) & (ts' = ts) & (sickness_checked' = sickness_checked) & (name' = name);
+endmodule
+
+// Additional action modules can be generated here
+// Examples based on Soar rules:
+// - SS-transition module
+// - D-transition module
+// - DD-transition module
+// - error detection module
+
+// Reward structures can be added here
+// Example:
+// rewards "mission_completion"
+//   time_counter = TOTAL_TIME: 1;
+// endrewards
 
