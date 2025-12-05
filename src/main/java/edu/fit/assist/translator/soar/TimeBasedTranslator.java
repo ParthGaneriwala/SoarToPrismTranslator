@@ -404,9 +404,23 @@ public class TimeBasedTranslator {
         sb.append("\n");
         
         // Generate transitions for each action module - action_state listens for signals
-        for (TransitionInfo info : transitions) {
+        // Use mutually exclusive guards to avoid overlaps
+        for (int i = 0; i < transitions.size(); i++) {
+            TransitionInfo info = transitions.get(i);
             String moduleName = info.transitionName.toLowerCase() + "_transition";
-            sb.append(String.format("  [sync] %s_ing=1 -> (action' = %d);\n", moduleName, info.toAction));
+            
+            // Build guard that excludes other transitions
+            StringBuilder guard = new StringBuilder();
+            guard.append(String.format("%s_ing=1", moduleName));
+            
+            for (int j = 0; j < transitions.size(); j++) {
+                if (i != j) {
+                    String otherModule = transitions.get(j).transitionName.toLowerCase() + "_transition";
+                    guard.append(String.format(" & !(%s_ing=1)", otherModule));
+                }
+            }
+            
+            sb.append(String.format("  [sync] %s -> (action' = %d);\n", guard.toString(), info.toAction));
         }
         sb.append("\n");
         
@@ -565,9 +579,12 @@ public class TimeBasedTranslator {
                 String proposeRuleName = "propose*" + transName + "-transition";
                 for (Rule proposeRule : rules.rules) {
                     if (proposeRule.ruleName.equals(proposeRuleName)) {
+                        System.err.println("DEBUG: Processing propose rule: " + proposeRuleName);
+                        System.err.println("DEBUG: Guards found: " + proposeRule.guards);
                         // Extract FROM action from guards
                         for (String guard : proposeRule.guards) {
                             if (guard.contains("action")) {
+                                System.err.println("DEBUG: Found action guard in " + proposeRuleName + ": " + guard);
                                 // Parse guards like "action = 0" or "action { << 3 2 >> }"
                                 if (guard.contains("<<")) {
                                     // Multiple values like "action { << 3 2 >> }"
@@ -578,17 +595,19 @@ public class TimeBasedTranslator {
                                         try {
                                             info.fromActions.add(Integer.parseInt(a));
                                         } catch (NumberFormatException e) {
-                                            // Ignore
+                                            System.err.println("DEBUG: Could not parse action value: " + a);
                                         }
                                     }
+                                    System.err.println("DEBUG: Extracted fromActions: " + info.fromActions);
                                 } else if (guard.contains("=")) {
                                     // Single value like "action = 0"
                                     String[] parts = guard.split("=");
                                     if (parts.length > 1) {
                                         try {
                                             info.fromAction = Integer.parseInt(parts[1].trim());
+                                            System.err.println("DEBUG: Extracted fromAction: " + info.fromAction);
                                         } catch (NumberFormatException e) {
-                                            // Ignore
+                                            System.err.println("DEBUG: Could not parse action value: " + parts[1]);
                                         }
                                     }
                                 }
@@ -657,12 +676,15 @@ public class TimeBasedTranslator {
             actionGuard = "action=" + info.fromAction;
         }
         
-        // Start transition
+        // Start transition - always generate if we have action info
         if (!actionGuard.isEmpty()) {
             sb.append(String.format("  [sync] time_counter < TOTAL_TIME & %s & %s_done=0 & %s_ing=0 ->\n",
                 actionGuard, moduleName, moduleName));
             sb.append(String.format("    (%s_ing' = 1);\n", moduleName));
             sb.append("\n");
+        } else {
+            // Fallback: generate with true guard (should not normally happen)
+            System.err.println("Warning: No action guard found for " + moduleName);
         }
         
         // Complete transition (probabilistic if PDF available)
@@ -692,12 +714,19 @@ public class TimeBasedTranslator {
         }
         
         // Reset done flag
-        sb.append(String.format("  [sync] %s_done=1 -> (%s_done' = 0);\n", moduleName, moduleName));
+        sb.append(String.format("  [sync] %s_done=1 & !(%s_ing=1) -> (%s_done' = 0);\n", moduleName, moduleName, moduleName));
         sb.append("\n");
         
-        // Else clause - no change
-        sb.append(String.format("  [sync] !(%s_done=1) & !(%s_ing=1) & !(time_counter < TOTAL_TIME & %s & %s_done=0 & %s_ing=0) ->\n",
-            moduleName, moduleName, actionGuard.isEmpty() ? "true" : actionGuard, moduleName, moduleName));
+        // Else clause - no change when none of the above conditions hold
+        StringBuilder elseGuard = new StringBuilder();
+        elseGuard.append(String.format("!(%s_done=1 & !(%s_ing=1))", moduleName, moduleName));
+        elseGuard.append(String.format(" & !(%s_ing=1)", moduleName));
+        if (!actionGuard.isEmpty()) {
+            elseGuard.append(String.format(" & !(time_counter < TOTAL_TIME & %s & %s_done=0 & %s_ing=0)",
+                actionGuard, moduleName, moduleName));
+        }
+        
+        sb.append(String.format("  [sync] %s ->\n", elseGuard.toString()));
         sb.append(String.format("    (%s_done' = %s_done) & (%s_ing' = %s_ing);\n",
             moduleName, moduleName, moduleName, moduleName));
         
