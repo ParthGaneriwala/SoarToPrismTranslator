@@ -203,6 +203,12 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
 
 //            System.out.println(variable + " " + value);
 
+            // Handle null value case
+            if (value == null) {
+                // Skip processing if value is null
+                return null;
+            }
+
             // Check is value is in the format: <x>
             String[] valueList =  value.split(" ");
             String attributePartOfValue = valueList[valueList.length-1];
