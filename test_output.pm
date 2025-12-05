@@ -5,7 +5,7 @@ dtmc
 const int TOTAL_TIME = 1200;
 const int mission_monitor  = 0;
 const int sickness_monitor = 1;
-const double pdf1 = 0.90;
+const double pdf1 = 0.50;
 
 
 module time

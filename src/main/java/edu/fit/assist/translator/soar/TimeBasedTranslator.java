@@ -57,24 +57,17 @@ public class TimeBasedTranslator {
     
     /**
      * Extract configuration from initialize and other rules
+     * Always extract from Soar rules first, then supplement with config if available
      */
     private void extractConfiguration() {
         Integer timeInterval = null;
         
-        // If we have a config, use its values
-        if (config != null) {
-            timeInterval = config.getSicknessSamplingInterval();
-            timeWindows = config.getTimeWindows();
-            commitTimes = config.getCommitTimes();
-            return; // Config provides everything we need
-        }
-        
-        // Otherwise extract from rules
+        // ALWAYS extract from Soar rules first - this is the primary source
         for (Rule rule : rules.rules) {
             if (rule.ruleName.equals("apply*initialize")) {
-                // Extract total time
+                // Extract total time from Soar rules (unless overridden by config)
                 String totalTimeStr = rule.valueMap.get("total-time");
-                if (totalTimeStr != null) {
+                if (totalTimeStr != null && config == null) {
                     try {
                         totalTime = Integer.parseInt(totalTimeStr);
                     } catch (NumberFormatException e) {
@@ -82,7 +75,7 @@ public class TimeBasedTranslator {
                     }
                 }
                 
-                // Store all initialization values as constants
+                // Store all initialization values as constants from Soar
                 for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
                     constantValues.put(entry.getKey(), entry.getValue());
                 }
@@ -104,7 +97,21 @@ public class TimeBasedTranslator {
             }
         }
         
-        // If time-interval not found in rules, try to infer from rule guards
+        // After extracting from Soar, supplement with config if available
+        // Config provides probability distributions and other data NOT in Soar
+        if (config != null) {
+            // Use config for time interval if available
+            timeInterval = config.getSicknessSamplingInterval();
+            // Supplement constants with config values (don't replace)
+            for (Map.Entry<String, Object> entry : config.getConstants().entrySet()) {
+                // Only add if not already present from Soar rules
+                if (!constantValues.containsKey(entry.getKey())) {
+                    constantValues.put(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+        
+        // If time-interval not found in config or rules, try to infer from rule guards
         // by finding time-counter comparisons
         if (timeInterval == null) {
             timeInterval = inferTimeIntervalFromRules();
@@ -259,17 +266,82 @@ public class TimeBasedTranslator {
     
     /**
      * Generate constant definitions
+     * Prioritizes constants extracted from Soar rules, supplements with config
      */
     private String generateConstants() {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("const int TOTAL_TIME = %d;\n", totalTime));
         
-        // Generate constants from config if available
+        // Extract module name constants from Soar rules
+        // Look for name values in initialize rule
+        boolean foundMissionMonitor = false;
+        boolean foundSicknessMonitor = false;
+        
+        for (Rule rule : rules.rules) {
+            if (rule.ruleName.equals("apply*initialize")) {
+                String nameValue = rule.valueMap.get("name");
+                if (nameValue != null) {
+                    // Found name initialization, use it to define constant
+                    if (nameValue.contains("mission") && !foundMissionMonitor) {
+                        sb.append(String.format("const int mission_monitor  = %d;\n", MISSION_MONITOR));
+                        foundMissionMonitor = true;
+                    }
+                }
+            }
+            // Check for monitor switching rules to find sickness_monitor
+            if (rule.ruleName.contains("switch-monitor") || rule.ruleName.contains("sickness")) {
+                if (!foundSicknessMonitor) {
+                    sb.append(String.format("const int sickness_monitor = %d;\n", SICKNESS_MONITOR));
+                    foundSicknessMonitor = true;
+                }
+            }
+        }
+        
+        // If not found in Soar rules, use defaults
+        if (!foundMissionMonitor) {
+            sb.append(String.format("const int mission_monitor  = %d;\n", MISSION_MONITOR));
+        }
+        if (!foundSicknessMonitor) {
+            sb.append(String.format("const int sickness_monitor = %d;\n", SICKNESS_MONITOR));
+        }
+        
+        // Add probability constants from Soar rules first
+        double pdf1 = findProbabilityValue("pdf1", -1.0);
+        if (pdf1 < 0) {
+            // If pdf1 not found, try using complement of sick_thres from Soar
+            double sickThres = findProbabilityValue("sick_thres", -1.0);
+            if (sickThres >= 0) {
+                // sick_thres is a threshold, pdf1 would be complement
+                pdf1 = 1.0 - sickThres;
+            }
+        }
+        
+        // If still not found in Soar, check config
+        if (pdf1 < 0 && config != null && config.getConstants().containsKey("pdf1")) {
+            Object pdf1Obj = config.getConstants().get("pdf1");
+            if (pdf1Obj instanceof Number) {
+                pdf1 = ((Number)pdf1Obj).doubleValue();
+            }
+        }
+        
+        // Use default only if not found anywhere
+        if (pdf1 < 0) {
+            pdf1 = 0.9;
+        }
+        
+        sb.append(String.format("const double pdf1 = %.2f;\n", pdf1));
+        
+        // Add any additional constants from config that aren't already defined
         if (config != null && !config.getConstants().isEmpty()) {
             for (Map.Entry<String, Object> entry : config.getConstants().entrySet()) {
                 String name = entry.getKey();
-                Object value = entry.getValue();
+                // Skip if already defined (mission_monitor, sickness_monitor, pdf1, TOTAL_TIME)
+                if (name.equals("mission_monitor") || name.equals("sickness_monitor") || 
+                    name.equals("pdf1") || name.equals("TOTAL_TIME")) {
+                    continue;
+                }
                 
+                Object value = entry.getValue();
                 if (value instanceof Double || value instanceof Float) {
                     sb.append(String.format("const double %s = %.2f;\n", name, ((Number)value).doubleValue()));
                 } else if (value instanceof Integer || value instanceof Long) {
@@ -278,23 +350,6 @@ public class TimeBasedTranslator {
                     sb.append(String.format("const %s = %s;\n", name, value));
                 }
             }
-        } else {
-            // Fallback to default constants
-            sb.append(String.format("const int mission_monitor  = %d;\n", MISSION_MONITOR));
-            sb.append(String.format("const int sickness_monitor = %d;\n", SICKNESS_MONITOR));
-            
-            // Add probability constants - look for pdf1 or sick_thres
-            // pdf1 is typically 0.9 (probability of staying healthy)
-            double pdf1 = findProbabilityValue("pdf1", 0.9);
-            if (pdf1 == 0.9) {
-                // If pdf1 not found, try using complement of sick_thres
-                double sickThres = findProbabilityValue("sick_thres", 0.5);
-                if (sickThres != 0.5) {
-                    // sick_thres is a threshold, pdf1 would be complement
-                    pdf1 = 1.0 - sickThres;
-                }
-            }
-            sb.append(String.format("const double pdf1 = %.2f;\n", pdf1));
         }
         
         sb.append("\n");

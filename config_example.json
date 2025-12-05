@@ -8,11 +8,6 @@
     "sicknessLevels": 2,
     "responseDuration": 60
   },
-  "constants": {
-    "mission_monitor": 0,
-    "sickness_monitor": 1,
-    "pdf1": 0.9
-  },
   "sicknessProbabilityTable": {
     "0,0,0": 0.9,
     "0,0,1": 0.1,
@@ -75,56 +70,5 @@
       "correctProbability": 0.998,
       "errorProbability": 0.002
     }
-  },
-  "modules": [
-    {
-      "name": "time",
-      "type": "time_counter",
-      "variables": [
-        {
-          "name": "time_counter",
-          "type": "int",
-          "range": "[0..TOTAL_TIME]",
-          "init": 0
-        }
-      ]
-    },
-    {
-      "name": "sickness",
-      "type": "state_machine",
-      "soarRulePatterns": [
-        ".*sickness.*",
-        ".*notsick.*",
-        ".*sick.*",
-        "propose\\*check\\*.*",
-        "apply\\*check\\*.*"
-      ],
-      "variables": [
-        {
-          "name": "name",
-          "type": "int",
-          "range": "[0..1]",
-          "init": "mission_monitor"
-        },
-        {
-          "name": "sick",
-          "type": "int",
-          "range": "[0..1]",
-          "init": 0
-        },
-        {
-          "name": "ts",
-          "type": "int",
-          "range": "[0..1]",
-          "init": 0
-        },
-        {
-          "name": "sickness_checked",
-          "type": "int",
-          "range": "[0..1]",
-          "init": 0
-        }
-      ]
-    }
-  ]
+  }
 }

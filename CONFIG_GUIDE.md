@@ -6,7 +6,20 @@ The Soar to PRISM translator now supports external configuration files that prov
 
 ## Configuration File Format
 
-The configuration file should be in JSON format and can include:
+The configuration file should be in JSON format. It is used to **supplement** information extracted from Soar rules with data that cannot be derived from the rules themselves (like probability distributions).
+
+### Important: Extraction Priority
+
+1. **Primary Source: Soar Rules** - Constants, module names, variables, and structure are extracted from Soar rules
+2. **Supplemental: Config File** - Probability distributions, response distributions, and other statistical data not present in Soar
+
+The config file should contain only:
+- Probability distributions (sickness tables, response distributions)
+- Model parameters (sampling intervals, durations)
+- Error distributions
+- Additional constants NOT present in Soar rules
+
+Do NOT duplicate information already in Soar rules (like module names or basic constants).
 
 ### Model Parameters
 ```json
@@ -23,20 +36,20 @@ The configuration file should be in JSON format and can include:
 }
 ```
 
-These parameters correspond to properties from the C# `CyberSicknessModel` class.
+These parameters correspond to properties from the C# `CyberSicknessModel` class and provide timing/structural information.
 
-### Constants
+### Constants (Optional - Only for Supplemental Data)
 ```json
 {
   "constants": {
-    "mission_monitor": 0,
-    "sickness_monitor": 1,
-    "pdf1": 0.9
+    "pdf2": 0.8,
+    "pdf3": 0.7,
+    "pdf4": 0.6
   }
 }
 ```
 
-Define numeric and string constants used in the PRISM model.
+**NOTE**: Only include constants here that are **NOT** in your Soar rules. Constants like `mission_monitor`, `sickness_monitor`, and `pdf1` are automatically extracted from Soar `apply*initialize` and related rules.
 
 ### Sickness Probability Table
 ```json
@@ -95,7 +108,7 @@ Probability distributions for response selection and decision making at differen
 
 Error probabilities for decision making based on sickness level.
 
-### Module Definitions
+### Module Definitions (Optional - For Complex Mappings)
 ```json
 {
   "modules": [
@@ -106,21 +119,21 @@ Error probabilities for decision making based on sickness level.
         ".*sickness.*",
         ".*notsick.*",
         "propose\\*check\\*.*"
-      ],
-      "variables": [
-        {
-          "name": "sick",
-          "type": "int",
-          "range": "[0..1]",
-          "init": 0
-        }
       ]
     }
   ]
 }
 ```
 
-Define PRISM modules and map them to Soar production rules using regex patterns.
+**NOTE**: Module structure and variables are automatically extracted from Soar rules. Only define modules in config if you need:
+- Custom regex patterns for rule-to-module mapping
+- Probability distributions associated with specific modules
+- Additional metadata not derivable from Soar
+
+The translator automatically:
+- Identifies modules from Soar rule names (e.g., rules containing "sickness" → sickness module)
+- Extracts variables from `apply*initialize` rule
+- Infers variable ranges from usage patterns
 
 ## Usage
 
@@ -138,18 +151,42 @@ mvn exec:java -Dexec.mainClass="edu.fit.assist.translator.soar.main" \
 
 ### Configuration Priority
 
-When a configuration file is provided:
-1. **Model parameters** (total time, intervals) are taken from the config
-2. **Constants** are loaded from the config
-3. **Time windows** are calculated from `sicknessSamplingInterval`
-4. **Probability distributions** are available for generating modules
-5. **Module mappings** link Soar rules to PRISM modules
+The translator follows this priority order:
+
+**1. Soar Rules (Primary Source):**
+- Module names extracted from rule names
+- Constants from `apply*initialize` rule
+- Variables from initialization and usage
+- State transitions from propose/apply rules
+- Time values from guards and actions
+
+**2. Config File (Supplemental Data):**
+- Probability distributions (sickness tables, response distributions)
+- Model parameters (sampling intervals, durations)
+- Error distributions
+- Additional constants not in Soar
+
+**3. Inference (Fallback):**
+- Time intervals inferred from rule patterns using GCD algorithm
+- Default values when neither Soar nor config provide data
+
+**What the config should contain:**
+- ✅ Probability distributions from statistical models
+- ✅ Response time distributions
+- ✅ Error rate distributions  
+- ✅ Model parameters (sampling intervals, max error counts)
+
+**What the config should NOT contain:**
+- ❌ Module names (extracted from Soar rule names)
+- ❌ Basic constants (extracted from `apply*initialize`)
+- ❌ Variable definitions (extracted from Soar rules)
+- ❌ State machine structure (derived from Soar transitions)
 
 Without a configuration file:
-1. Model parameters are extracted from Soar `apply*initialize` rule
-2. Time intervals are inferred from rule patterns
-3. Constants use default values
-4. Only basic modules are generated
+1. All information extracted from Soar rules
+2. Time intervals inferred from patterns
+3. Default probability values used
+4. Basic modules generated
 
 ## Exporting from C# CyberSicknessModel
 
