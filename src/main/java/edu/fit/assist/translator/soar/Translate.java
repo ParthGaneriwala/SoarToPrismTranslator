@@ -2,7 +2,6 @@ package edu.fit.assist.translator.soar;
 
 import java.util.*;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static edu.fit.assist.translator.soar.TranslatorUtils.*;
@@ -12,151 +11,62 @@ public class Translate {
     public Translate(SoarRules rules){
         this.rules = rules;
     }
+
     String translateSoarToPrismGeneral() {
         StringBuilder output = new StringBuilder();
 
-        // Extract global constants from the apply*initialize rule.
         LinkedHashMap<String, String> globalConstants = extractGlobalConstants(rules);
 
         output.append("dtmc\n\n");
+        output.append("global phase : [0..1] init 0;      // 0 = propose, 1 = apply\n");
 
+        Map<String, Integer> operatorIdsApply = new LinkedHashMap<>();
         for (Rule rule : rules.rules) {
             if (rule.ruleName.startsWith("apply*")) {
                 collectAssignmentsFromApplyRule(rule);
             }
         }
-        Set<String> declaredStateVars = variableInitMap.keySet();
 
+        LinkedHashMap<String, Integer> sequentialOperatorIds = new LinkedHashMap<>();
+        List<String> opMappings = new ArrayList<>();
+        int operatorIdCounter = 0;
+
+        sequentialOperatorIds.put("initialize", operatorIdCounter++);
+        opMappings.add("0 = initialize");
+
+        Set<String> declaredStateVars = variableInitMap.keySet();
         for (Map.Entry<String, String> entry : globalConstants.entrySet()) {
             String key = entry.getKey();
             String val = entry.getValue();
 
-            if (declaredStateVars.contains(key)) continue; // Skip if declared as a state variable
-
-            if (!val.matches("^-?\\d+(\\.\\d+)?$")) continue; // Skip non-numeric
+            if (declaredStateVars.contains(key)) continue;
 
             String prismVar = toPrismVariable(key);
 
-            if (val.contains(".")) {
-                output.append("const double ").append(prismVar).append(" = ").append(val).append(";\n");
-            } else {
-                output.append("const int ").append(prismVar).append(" = ").append(val).append(";\n");
-            }
-        }
-
-        output.append("\n");
-
-        // Process propose rules, find matching apply rules, and group outcomes by guard.
-        Map<String, List<MergedTransition>> transitionsByGuard = new LinkedHashMap<>();
-        for (Rule proposeRule : rules.rules) {
-            if (!proposeRule.ruleName.startsWith("propose*")) continue;
-
-            // Extract the base operator name dynamically.
-            String baseName = proposeRule.ruleName.substring("propose*".length());
-            Rule applyRule = findApplyRuleFor(baseName, rules);
-            if (applyRule == null) continue; // no matching rule
-            // Derive the probability expression generically.
-            String probabilityExpr = extractProbabilityExpression(proposeRule, applyRule, globalConstants);
-
-            // Generate the next-state assignment string by iterating over all assignments.
-            // This is a generic routine that processes every key in applyRule.valueMap.
-            String assignmentString = generateAssignmentString(applyRule.valueMap);
-
-            // Generate a generic guard from the propose rule.
-            String guard = generateGuard(proposeRule);
-
-            // Store this outcome under the extracted guard.
-            transitionsByGuard
-                    .computeIfAbsent(guard, k -> new ArrayList<>())
-                    .add(new MergedTransition(guard, probabilityExpr, assignmentString));
-        }
-
-        // Construct the PRISM module using the grouped transitions.
-        output.append("module user\n");
-        output.append(generateStateDeclarations());
-        // For each guard, merge outcomes:
-        for (Map.Entry<String, List<MergedTransition>> entry : transitionsByGuard.entrySet()) {
-            String guard = entry.getKey();
-            List<MergedTransition> outcomes = entry.getValue();
-            if(guard.contains("state_superstate"))
+            if (val.equals("yes") || val.equals("no")) {
+                output.append("global ").append(prismVar)
+                        .append(" : bool init ")
+                        .append(val.equals("yes") ? "true" : "false").append(";\n");
                 continue;
-            output.append("    [] ").append(guard).append(" -> ");
-            for (int i = 0; i < outcomes.size(); i++) {
-                MergedTransition outcome = outcomes.get(i);
-
-                output.append(outcome.probabilityExpr)
-                        .append(": ").append(outcome.assignmentString);
-                if (i < outcomes.size() - 1) {
-                    output.append(" + ");
-                }
             }
-            output.append(";\n");
-        }
-        output.append("endmodule\n");
 
-        return output.toString();
-    }
-
-    // Converts any Soar key to a valid Prism variable name.
-    // For example, ^low-to-med-prob might become state_low_to_med_prob.
-    private String toPrismVariable(String key) {
-        String clean = key.replace("-", "_");
-        return clean.startsWith("state_") ? clean : "state_" + clean;
-    }
-
-    // Given a valueMap (from an apply rule), generate an assignment string
-    // that assigns each state variable. For example:
-    // { "ssq": "1", "last-transition": "ssq-low-to-med" }  →  "(state_ssq' = 1) & (state_last_transition' = ssq_low_to_med)"
-    private String generateAssignmentString(Map<String, String> valueMap) {
-        List<String> assignments = new ArrayList<>();
-        for (Map.Entry<String, String> entry : valueMap.entrySet()) {
-            // Filter out keys that are metadata, such as operator names.
-            if (entry.getKey().contains("operator") || entry.getKey().contains("name"))
+            if (val.equals("none") || !val.matches("^-?\\d+(\\.\\d+)?$")) {
+                output.append("global ").append(prismVar)
+                        .append(" : [0..2] init 0;\n");
                 continue;
-            String prismVar = toPrismVariable(entry.getKey());
-            assignments.add("(" + prismVar + "' = " + entry.getValue() + ")");
-        }
-        return assignments.isEmpty() ? "" : String.join(" & ", assignments);
-    }
-
-    // Generic guard generator that converts propose rule conditions to a PRISM guard.
-    // For example, converting (state <s> ^gender 1) to 'state_gender = 1'.
-    private String generateGuard(Rule proposeRule) {
-        List<String> conditions = new ArrayList<>();
-        for (String cond : proposeRule.guards) {
-            // Remove extra symbols and reformat; this implementation should be extended
-            // to properly handle all Soar syntactic variants.
-            String plain = cond.replace("(", "").replace(")", "").trim();
-            plain = plain.replace("^", "state_").replace("<s>", "").trim();
-            conditions.add(plain);
-        }
-        return String.join(" & ", conditions);
-    }
-
-    private final Map<String, Set<Integer>> variableValueMap = new HashMap<>();
-    private final Map<String, Integer> variableInitMap = new HashMap<>();
-
-    // Call this for every apply rule
-    void collectAssignmentsFromApplyRule(Rule applyRule) {
-        for (Map.Entry<String, String> e : applyRule.valueMap.entrySet()) {
-            String key = e.getKey();
-            String val = e.getValue();
-
-            if (!val.matches("^-?\\d+$")) continue; // Only collect numeric vars
-
-            int intVal = Integer.parseInt(val);
-            variableValueMap.computeIfAbsent(key, k -> new TreeSet<>()).add(intVal);
-
-            // If this is from apply*initialize, store init val
-            if (applyRule.ruleName.equals("apply*initialize")) {
-                variableInitMap.put(key, intVal);
             }
-        }
-    }
 
-    // After collecting all apply rules
-    String generateStateDeclarations() {
-        StringBuilder sb = new StringBuilder();
+            int maxVal;
+            try {
+                double d = Double.parseDouble(val);
+                maxVal = (int) Math.ceil(d) + 1;
+            } catch (Exception e) {
+                maxVal = 5;
+            }
+            output.append("global ").append(prismVar)
+                    .append(" : [0..").append(maxVal).append("] init 0;\n");
+        }
+
         for (String key : variableValueMap.keySet()) {
             Set<Integer> values = variableValueMap.get(key);
             if (values.isEmpty()) continue;
@@ -165,7 +75,167 @@ public class Translate {
             int max = Collections.max(values);
             int init = variableInitMap.getOrDefault(key, 0);
 
-            String prismVar = key.replace("-", "_");
+            String prismVar = toPrismVariable(key);
+            output.append("global ").append(prismVar)
+                    .append(" : [").append(min).append("..").append(max).append("] init ").append(init).append(";\n");
+        }
+
+        output.append("global state_operator_name : [0.." + (rules.rules.size() - 1) + "] init 0;\n\n");
+
+        output.append("module user\n");
+        for (Rule proposeRule : rules.rules) {
+            if (!proposeRule.ruleName.startsWith("propose*")) continue;
+
+            String baseNameForId = extractOperatorNameFromPropose(proposeRule);
+
+            if (!sequentialOperatorIds.containsKey(baseNameForId)) {
+                sequentialOperatorIds.put(baseNameForId, operatorIdCounter++);
+                opMappings.add(sequentialOperatorIds.get(baseNameForId) + " = " + baseNameForId);
+            }
+
+            if (proposeRule.ruleName.equals("propose*initialize")) continue;
+
+            String guard = generateGuard(proposeRule);
+            guard = Arrays.stream(guard.split(" & "))
+                    .filter(g -> !g.matches(".* = state_.*") && !g.matches("state_name = .*"))
+                    .collect(Collectors.joining(" & "));
+            if (guard == null || guard.isEmpty()) {
+                System.out.println("Empty guard for rule: " + proposeRule.ruleName);
+                continue;
+            }
+            if (guard.contains("state_superstate")) {
+                System.out.println("Skipping superstate guard in: " + proposeRule.ruleName);
+                continue;
+            }
+
+            int opId = sequentialOperatorIds.get(baseNameForId);
+            output.append("    [] phase=0 & state_name=0 & ").append(guard)
+                    .append(" -> 1.0 : (state_operator_name' = ").append(opId)
+                    .append(") & (phase' = 1);\n");
+        }
+
+        output.append("\n// Apply transitions\n");
+        for (Rule applyRule : rules.rules) {
+            if (!applyRule.ruleName.startsWith("apply*")) continue;
+            if (applyRule.ruleName.equals("apply*initialize")) continue;
+
+            String baseName = applyRule.ruleName.substring("apply*".length()).trim();
+
+            System.out.println("DEBUG: Processing apply rule: " + applyRule.ruleName);
+            System.out.println("  mapped to baseName = " + baseName);
+
+            Integer opId = sequentialOperatorIds.get(baseName);
+            if (opId == null) {
+                System.out.println("  NO MATCH FOR: " + baseName + " in " + sequentialOperatorIds.keySet());
+                continue;
+            }
+            System.out.println("  matched ID = " + opId);
+
+            List<String> assigns = new ArrayList<>();
+            for (Map.Entry<String, String> entry : applyRule.valueMap.entrySet()) {
+                String k = entry.getKey();
+                String v = entry.getValue();
+
+                if (v.equals("yes")) {
+                    assigns.add(toPrismVariable(k) + "' = true");
+                } else if (v.equals("no")) {
+                    assigns.add(toPrismVariable(k) + "' = false");
+                } else if (v.matches("\\(\\+ 1 <.*>\\)")) {
+                    String var = v.replace("(", "").replace(")", "").replace("+ 1 <", "").replace(">", "").trim();
+                    assigns.add(toPrismVariable(var) + "' = " + toPrismVariable(var) + " + 1");
+                }
+            }
+            assigns.add("phase' = 0");
+
+            output.append("    [] phase=1 & state_operator_name=").append(opId)
+                    .append(" -> 1.0 : ")
+                    .append(String.join(" & ", assigns)).append(";\n");
+        }
+
+        output.append("endmodule\n\n");
+        output.append("// Operator mappings: \n// ").append(String.join(", ", opMappings)).append("\n");
+        return output.toString();
+    }
+
+    private String toPrismVariable(String key) {
+        key = key.replace("-", "_");
+        if (key.startsWith("state_")) return key;
+        if (key.startsWith("state")) return "state_" + key.substring(5);
+        return "state_" + key;
+    }
+
+    private String extractOperatorNameFromPropose(Rule rule) {
+        System.out.println("DEBUG: Extracting operator name from propose rule: " + rule.ruleName);
+
+        for (String line : rule.rhsLines) {
+            System.out.println("  Checking RHS line: " + line);
+            if (line.contains("^name")) {
+                String[] parts = line.split("\\^name");
+                if (parts.length > 1) {
+                    String raw = parts[1].replaceAll("[()<>]", "").trim();
+                    System.out.println("    Raw extracted after ^name: '" + raw + "'");
+                    String[] tokens = raw.split("\\s+");
+                    if (tokens.length > 0) {
+                        System.out.println("    Candidate operator name token: '" + tokens[0] + "'");
+                        if (tokens[0].startsWith("apply-")) {
+                            System.out.println("    -> Matched operator name: '" + tokens[0] + "'");
+                            return tokens[0];
+                        }
+                    }
+                }
+            }
+        }
+
+        String fallback = rule.ruleName.substring("propose*".length());
+        System.out.println("  Fallback to rule-derived name: " + fallback);
+        return fallback;
+    }
+
+    private String generateGuard(Rule proposeRule) {
+        List<String> conditions = new ArrayList<>();
+        for (String cond : proposeRule.guards) {
+            String plain = cond.replace("(", "").replace(")", "").trim();
+            plain = plain.replace("^", "").replace("<s>", "").trim();
+            String[] parts = plain.split(" ", 3);
+            if (parts.length == 3) {
+                String var = toPrismVariable(parts[0]);
+                String op = parts[1];
+                String val = parts[2];
+                if (val.equals("yes")) val = "true";
+                if (val.equals("no")) val = "false";
+                conditions.add(var + " " + op + " " + val);
+            } else {
+                conditions.add(toPrismVariable(plain));
+            }
+        }
+        return String.join(" & ", conditions);
+    }
+
+    private final Map<String, Set<Integer>> variableValueMap = new HashMap<>();
+    private final Map<String, Integer> variableInitMap = new HashMap<>();
+
+    void collectAssignmentsFromApplyRule(Rule applyRule) {
+        for (Map.Entry<String, String> e : applyRule.valueMap.entrySet()) {
+            String key = e.getKey();
+            String val = e.getValue();
+            if (!val.matches("^-?\\d+$")) continue;
+            int intVal = Integer.parseInt(val);
+            variableValueMap.computeIfAbsent(key, k -> new TreeSet<>()).add(intVal);
+            if (applyRule.ruleName.equals("apply*initialize")) {
+                variableInitMap.put(key, intVal);
+            }
+        }
+    }
+
+    String generateStateDeclarations() {
+        StringBuilder sb = new StringBuilder();
+        for (String key : variableValueMap.keySet()) {
+            Set<Integer> values = variableValueMap.get(key);
+            if (values.isEmpty()) continue;
+            int min = 0;
+            int max = Collections.max(values);
+            int init = variableInitMap.getOrDefault(key, 0);
+            String prismVar = toPrismVariable(key);
             sb.append("    ").append(prismVar)
                     .append(": [").append(min).append("..").append(max).append("] init ").append(init).append(";\n");
         }

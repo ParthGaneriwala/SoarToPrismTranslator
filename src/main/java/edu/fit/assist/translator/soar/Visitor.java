@@ -10,7 +10,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
     boolean negateCondition = false;
 
     public SoarRules rules;
-
+    String currentActionContextVar = "";
     /**
      * Visit a parse tree produced by {@link SoarParser#soar}.
      *
@@ -539,6 +539,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
     public Object visitAction(SoarParser.ActionContext ctx) {
         // context
         String contextVar = (String)visit(ctx.variable());
+        currentActionContextVar = contextVar;
 //        System.out.println(contextVar);
         currentContext = currentRule.getContext(contextVar);
         List<SoarParser.Attr_value_makeContext> attributes = ctx.attr_value_make();
@@ -610,57 +611,76 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
     @Override
     public Object visitAttr_value_make(SoarParser.Attr_value_makeContext ctx) {
         String attributeName = (String)visit(ctx.variable_or_sym_constant(0).sym_constant());
-        String variable = currentContext+"_"+attributeName;
+        String variable = currentContext + "_" + attributeName;
         variable = cleanVariableName(variable);
         SoarParser.Value_makeContext value = ctx.value_make();
         currentContext = variable;
         String val = (String)visit(value);
-        //if(currentRule.ruleName.startsWith("apply*takeoff")){
-//        System.out.println(val);
-        //}
-        if(val == null){
+
+        // Use the class-level variable
+        if (attributeName.equals("name") && currentActionContextVar.equals("<o>") && val != null) {
+            currentRule.addRHSLine("(<o> ^name " + val + ")");
+        }
+
+        if (val == null) {
             return null;
         }
 
-        if(val.startsWith("<") && val.endsWith(">")){
+        // Handle increment expression (+ 1 <var>)
+        if (val != null && val.matches("\\(\\+ 1 <.*>\\)")) {
+            // Extract variable from expression like (+ 1 <lc>)
+            String innerVar = val.replaceAll("[()<>]", "")
+                    .replace("+ 1 ", "").trim();
+            String prismVar = cleanVariableName(currentContext); // state_latency_counter, etc.
 
-//            System.out.println(variable);
-//            System.out.println(val);
-            /* If variable value is aready in the context map and its identifier differs
-                Then, treat it as an assignment statement.
-                Example (<s> ^value <val>)-->(<s> ^attribute <val>) is doing ^attribute := ^value
-            */
-            if(currentRule.contextMap.containsKey(val) && !currentRule.getContext(val).equals(variable)){
-                currentRule.addAttrValue(variable, currentRule.getContext(val));
-                rules.addVariableValue(variable, "^VAR"+currentRule.getContext(val));
+            if (prismVar != null) {
+                currentRule.addIncrementAssignment(prismVar, innerVar);
+            } else {
+                System.out.println("WARNING: Missing context for 1 + <" + innerVar + "> in rule " + currentRule.ruleName);
+            }
 
-                String leftSide = variable;
-                String rightSide = currentRule.getContext(val);
-//                System.out.println(leftSide);
-//                System.out.println(rightSide);
-                rules.addTypeNode(leftSide, rightSide);
-                rules.addTypeNode(rightSide, leftSide);
+            return null; // skip rest
+        }
 
-            }else{
+        // Handle symbolic variable references
+        if (val.startsWith("<") && val.endsWith(">")) {
+            if (currentRule.contextMap.containsKey(val) && !currentRule.getContext(val).equals(variable)) {
+                String resolved = currentRule.getContext(val);
+                currentRule.addAttrValue(variable, resolved);
+                rules.addVariableValue(variable, "^VAR" + resolved);
+                rules.addTypeNode(variable, resolved);
+                rules.addTypeNode(resolved, variable);
+            } else {
                 currentRule.addContext(val, variable);
             }
+            return null;
+        }
 
-        }else if(val.contains("<") && val.contains(">")){
-
+        // Handle substitutions like 'val = 1+<x>' or 'val = X'
+        if (val.contains("<") && val.contains(">")) {
             String attribute = val.replaceAll("(<[a-zA-Z0-9*]+>).*", "$1");
+            String replacement = currentRule.contextMap.get(attribute);
 
-            val = val.replaceAll(attribute, currentRule.contextMap.get(attribute));
-            currentRule.addAttrValue(variable, val);
-        }else{
-            currentRule.addAttrValue(variable, val);
-            rules.addVariableValue(variable, val);
-            if(currentRule.isElaboration && currentRule.guards.size() == 1 && currentRule.guards.get(0).equals("state_superstate = nil")){
-                rules.variables.get(variable).initialValue = val;
+            if (replacement != null) {
+                val = val.replace(attribute, replacement);
+            } else {
+                System.out.println("WARNING: Missing context for " + attribute + " in rule " + currentRule.ruleName);
             }
+        }
+
+        // Store actual value
+        currentRule.addAttrValue(variable, val);
+        rules.addVariableValue(variable, val);
+
+        // Track initial value if elaboration rule
+        if (currentRule.isElaboration && currentRule.guards.size() == 1 &&
+                currentRule.guards.get(0).equals("state_superstate = nil")) {
+            rules.variables.get(variable).initialValue = val;
         }
 
         return null;
     }
+
 
     /**
      * Visit a parse tree produced by {@link SoarParser#variable_or_sym_constant}.

@@ -5,7 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.ArrayList;
 import java.util.Map;
 
-public class Rule{
+public class Rule {
     String ruleName;
     HashMap<String, String> contextMap; // Example: Maps <s> to state or <o> to state_operator
     ArrayList<String> variables; // Stores all variables used by this rule
@@ -18,88 +18,97 @@ public class Rule{
     boolean isElaboration = false;
     LinkedHashMap<String, Double> valueProbs;
 
-    public Rule(String name, LinkedHashMap<String, Variable> map){
+    // Holds the RHS (action) lines of the rule
+    public ArrayList<String> rhsLines;
+
+    public Rule(String name, LinkedHashMap<String, Variable> map) {
         this.ruleName = name;
-        this.contextMap = new HashMap<String, String>();
-        this.variables = new ArrayList<String>();
-        this.guards = new ArrayList<String>();
+        this.contextMap = new HashMap<>();
+        this.variables = new ArrayList<>();
+        this.guards = new ArrayList<>();
         this.variableMap = map;
-        this.valueMap = new LinkedHashMap<String, String>();
-        this.valueProbs = new LinkedHashMap<String, Double>();
+        this.valueMap = new LinkedHashMap<>();
+        this.valueProbs = new LinkedHashMap<>();
         this.groupedAssignments = new LinkedHashMap<>();
+        this.rhsLines = new ArrayList<>();
     }
 
-
-    public String formatGuard(){
+    public String formatGuard() {
         String output = "";
         boolean first = true;
-        ArrayList<String> newGuards = new ArrayList<String> ();
-        for(String guard : guards){
-            //System.out.println(guard);
+        ArrayList<String> newGuards = new ArrayList<>();
+        for (String guard : guards) {
             String variableName = guard.split(" ")[0];
-            //System.out.println("H" +variableName+"Q");
-            if(variableMap.get(variableName)==null){
+            if (variableMap.get(variableName) == null) {
                 continue;
             }
             int type = variableMap.get(variableName).varType;
-            //System.out.println(type);
-            if(type == Variable.INT){
-
+            if (type == Variable.INT) {
                 guard = guard.replaceAll(" != nil", "_exists = yes");
                 guard = guard.replaceAll(" = nil", "_exists = no");
-            }else if(type == Variable.FLOAT){
-
+            } else if (type == Variable.FLOAT) {
                 guard = guard.replaceAll(" != nil", "_exists = yes");
                 guard = guard.replaceAll(" = nil", "_exists = no");
             }
-
-            if(!first){
+            if (!first) {
                 output += " & ";
-            }else{
+            } else {
                 first = false;
             }
             output += guard;
             newGuards.add(guard);
-
         }
-
         this.guards = newGuards;
-        // add the negation of the action side of the elaborations
-        if(this.isElaboration){
 
-            for(String var : valueMap.keySet()){
-                // Handle edge case when there are no guard conditions
-                if(!first){
+        // Add negation of action side of elaborations
+        if (this.isElaboration) {
+            for (String var : valueMap.keySet()) {
+                if (!first) {
                     output += " & ";
-                }else{
+                } else {
                     first = false;
                 }
-                output +=  var + " != " + valueMap.get(var);
+                output += var + " != " + valueMap.get(var);
             }
-
         }
         return output;
     }
-    public void addAttrValue(String var, String val){
+
+    public void addAttrValue(String var, String val) {
         valueMap.put(var, val);
     }
 
-
-    public void addGuard(String guard){
+    public void addGuard(String guard) {
         guards.add(guard);
     }
 
-    public void addVariable(String var){
+    public void addVariable(String var) {
         variables.add(var);
     }
-    public void addContext(String var, String context){
-        this.contextMap.put(var, context);
+
+    public void addContext(String key, String value) {
+        if (!key.startsWith("<")) {
+            key = "<" + key + ">";
+        }
+        value = value.replace("-", "_"); // normalize to match PRISM
+        contextMap.put(key, value);
     }
 
-    public String getContext(String var){
-        return this.contextMap.get(var);
+    public String getContext(String var) {
+        if (!var.startsWith("<")) {
+            var = "<" + var + ">";
+        }
+        return contextMap.get(var);
     }
 
+    // Add RHS line
+    public void addRHSLine(String line) {
+        rhsLines.add(line);
+    }
 
+    public ArrayList<String> incrementAssignments = new ArrayList<>();
+
+    public void addIncrementAssignment(String variable, String originalVar) {
+        incrementAssignments.add(variable + "' = " + variable + " + 1");
+    }
 }
-
