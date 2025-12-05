@@ -202,7 +202,11 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
             String value = (String)visit(values.get(0));
 
 //            System.out.println(variable + " " + value);
-
+            // Handle null value case
+            if (value == null) {
+                // Skip processing if value is null
+                return null;
+            }
             // Check is value is in the format: <x>
             String[] valueList =  value.split(" ");
             String attributePartOfValue = valueList[valueList.length-1];
@@ -392,11 +396,12 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitSimple_test(SoarParser.Simple_testContext ctx) {
-
+//        System.err.println(ctx.getText());
         if(ctx.relational_test() != null){
             return visit(ctx.relational_test());
+        } else {
+            return visit(ctx.disjunction_test());
         }
-        return null;
     }
 
     /**
@@ -490,11 +495,12 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
      */
     @Override
     public Object visitConstant(SoarParser.ConstantContext ctx) {
-//        System.out.println(ctx.getText());
+
         if (ctx.sym_constant() != null){
             return (Object)ctx.sym_constant().Sym_constant().getSymbol().getText();
         }
         if(ctx.Int_constant() != null){
+//            System.out.println(ctx.getText());
             return (Object)ctx.Int_constant().getSymbol().getText();
         }
         if(ctx.Float_constant() != null){
