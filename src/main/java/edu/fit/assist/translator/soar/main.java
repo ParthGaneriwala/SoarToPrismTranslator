@@ -40,9 +40,22 @@ public class main{
                 }
             }
 
-            // Translate to PRISM
-            Translate translatorFormatter = new Translate(visitor.rules);
-            String translatedText = translatorFormatter.translateSoarToPrismGeneral();
+            // Check if this is a time-based model
+            boolean isTimeBasedModel = hasTimeBasedRules(visitor.rules);
+            
+            String translatedText;
+            if (isTimeBasedModel) {
+                // Use TimeBasedTranslator for time-window models
+                System.out.println("// Detected time-based model, using TimeBasedTranslator");
+                TimeBasedTranslator timeTranslator = new TimeBasedTranslator(visitor.rules);
+                translatedText = timeTranslator.translateToTimeBased();
+            } else {
+                // Use general translator
+                System.out.println("// Using general translator");
+                Translate translatorFormatter = new Translate(visitor.rules);
+                translatedText = translatorFormatter.translateSoarToPrismGeneral();
+            }
+            
             System.out.println(translatedText);
             PrintWriter pw = new PrintWriter(new File("output1.pm"));
             pw.println(translatedText);
@@ -52,6 +65,22 @@ public class main{
         }catch(Exception e){
             e.printStackTrace();
         }
+    }
+    
+    /**
+     * Check if this is a time-based model by looking for time-related variables
+     */
+    private static boolean hasTimeBasedRules(SoarRules rules) {
+        for (Rule rule : rules.rules) {
+            // Check for time-related variables
+            if (rule.valueMap.containsKey("time-counter") ||
+                rule.valueMap.containsKey("total-time") ||
+                rule.ruleName.contains("sickness") ||
+                rule.ruleName.contains("time")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public static String readInputFile(String path) throws FileNotFoundException{
