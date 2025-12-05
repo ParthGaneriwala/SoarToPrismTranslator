@@ -89,6 +89,26 @@ mvn compile exec:java -Dexec.mainClass="edu.fit.assist.translator.soar.TestTimeT
 
 ## Extending the Translator
 
+### Time Window Configuration
+
+Time windows are now **automatically inferred** from the Soar rules:
+
+1. **Total Time**: Extracted from `apply*initialize` rule's `total-time` value
+2. **Time Interval**: Inferred by analyzing:
+   - Time-counter comparisons in rule guards
+   - Time-counter operations in rule actions
+   - GCD (Greatest Common Divisor) of time differences found in rules
+
+3. **Default Behavior**: If no interval can be inferred, defaults to 300
+
+The translator automatically generates:
+- **Time windows**: [0, interval, 2*interval, ..., total_time]
+- **Commit times**: [interval-1, 2*interval-1, ..., total_time-1]
+
+Example: With `total_time=1200` and inferred `interval=300`:
+- Windows: [0, 300, 600, 900, 1200]
+- Commits: [299, 599, 899, 1199]
+
 ### Adding Action Modules
 
 To add support for additional modules (select, decide, error, etc.):
@@ -111,9 +131,19 @@ private String generateSelectModule() {
 }
 ```
 
-### Customizing Time Windows
+### Customizing Time Windows (Advanced)
 
-Time windows are inferred from the Soar rules or can be customized in the `extractConfiguration()` method.
+While time windows are automatically inferred, you can understand the inference process:
+
+1. The translator scans all parsed Soar rules for time-related values
+2. It extracts numeric values from guards and actions involving `time-counter`
+3. It calculates the GCD of differences between these values
+4. This GCD becomes the time interval
+
+If you need to override this behavior, you can:
+- Ensure your Soar rules contain explicit time-counter comparisons
+- Use consistent time intervals throughout your rules
+- The inference algorithm will find the common interval pattern
 
 ## Limitations
 

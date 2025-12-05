@@ -33,6 +33,8 @@ public class TimeBasedTranslator {
      * Extract configuration from initialize and other rules
      */
     private void extractConfiguration() {
+        Integer timeInterval = null;
+        
         for (Rule rule : rules.rules) {
             if (rule.ruleName.equals("apply*initialize")) {
                 // Extract total time
@@ -48,11 +50,142 @@ public class TimeBasedTranslator {
                 // Store all initialization values as constants
                 constantValues.putAll(rule.valueMap);
             }
+            
+            // Look for time-interval in elaborate rules
+            if (rule.ruleName.contains("elaborate") && rule.ruleName.contains("time-interval")) {
+                // Check valueMap for ti or time-interval
+                for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
+                    if (entry.getKey().contains("ti") || entry.getKey().contains("time-interval")) {
+                        String intervalVal = entry.getValue();
+                        // The value might be a variable reference like <ti>, check if it's in guards
+                        if (intervalVal.startsWith("<") && intervalVal.endsWith(">")) {
+                            // It's a variable, we need to look at guards or context
+                            continue;
+                        }
+                    }
+                }
+            }
         }
         
-        // Default windows - could be enhanced to infer from rules in future
-        timeWindows = Arrays.asList(0, 300, 600, 900, 1200);
-        commitTimes = Arrays.asList(299, 599, 899, 1199);
+        // If time-interval not found in rules, try to infer from rule guards
+        // by finding time-counter comparisons
+        if (timeInterval == null) {
+            timeInterval = inferTimeIntervalFromRules();
+        }
+        
+        // Generate time windows based on interval
+        if (timeInterval != null && timeInterval > 0) {
+            generateTimeWindows(timeInterval);
+        } else {
+            // Fallback: use default interval of 300
+            generateTimeWindows(300);
+        }
+    }
+    
+    /**
+     * Infer time interval by analyzing guards and time-counter operations in rules
+     */
+    private Integer inferTimeIntervalFromRules() {
+        Set<Integer> timeValues = new TreeSet<>();
+        
+        // Scan all rules for time-counter related operations
+        for (Rule rule : rules.rules) {
+            // Check guards for time-counter comparisons
+            for (String guard : rule.guards) {
+                if (guard.contains("time-counter") || guard.contains("time_counter")) {
+                    // Try to extract numeric values from the guard
+                    String[] parts = guard.split("\\s+");
+                    for (String part : parts) {
+                        try {
+                            int value = Integer.parseInt(part.replaceAll("[^0-9]", ""));
+                            if (value > 0 && value <= totalTime) {
+                                timeValues.add(value);
+                            }
+                        } catch (NumberFormatException e) {
+                            // Not a number, skip
+                        }
+                    }
+                }
+            }
+            
+            // Check valueMap for time-counter updates
+            for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
+                if (entry.getKey().contains("time-counter") || entry.getKey().contains("time_counter")) {
+                    String value = entry.getValue();
+                    // Check for increment operations like (+ <pdf2> <tc>) or numeric values
+                    if (value.matches(".*\\d+.*")) {
+                        try {
+                            // Extract all numbers from the value
+                            String nums = value.replaceAll("[^0-9]", "");
+                            if (!nums.isEmpty()) {
+                                int val = Integer.parseInt(nums);
+                                if (val > 0 && val <= totalTime) {
+                                    timeValues.add(val);
+                                }
+                            }
+                        } catch (NumberFormatException e) {
+                            // Not a simple number
+                        }
+                    }
+                }
+            }
+        }
+        
+        // If we found time values, calculate the interval
+        if (!timeValues.isEmpty()) {
+            List<Integer> sortedValues = new ArrayList<>(timeValues);
+            Collections.sort(sortedValues);
+            
+            // Calculate GCD of differences to find the interval
+            if (sortedValues.size() >= 2) {
+                List<Integer> differences = new ArrayList<>();
+                for (int i = 1; i < sortedValues.size(); i++) {
+                    int diff = sortedValues.get(i) - sortedValues.get(i-1);
+                    if (diff > 0) {
+                        differences.add(diff);
+                    }
+                }
+                
+                if (!differences.isEmpty()) {
+                    // Find GCD of all differences
+                    int gcd = differences.get(0);
+                    for (int i = 1; i < differences.size(); i++) {
+                        gcd = gcd(gcd, differences.get(i));
+                    }
+                    return gcd;
+                }
+            }
+        }
+        
+        return null;
+    }
+    
+    /**
+     * Calculate GCD of two numbers
+     */
+    private int gcd(int a, int b) {
+        if (b == 0) return a;
+        return gcd(b, a % b);
+    }
+    
+    /**
+     * Generate time windows and commit times based on interval
+     */
+    private void generateTimeWindows(int interval) {
+        List<Integer> windows = new ArrayList<>();
+        List<Integer> commits = new ArrayList<>();
+        
+        // Generate windows from 0 to totalTime with given interval
+        for (int t = 0; t <= totalTime; t += interval) {
+            windows.add(t);
+            // Commit time is one before the next window (except for the last window)
+            if (t + interval <= totalTime) {
+                commits.add(t + interval - 1);
+            }
+        }
+        
+        timeWindows = windows;
+        commitTimes = commits;
     }
     
     /**
