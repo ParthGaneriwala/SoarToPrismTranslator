@@ -324,7 +324,7 @@ public class TimeBasedTranslator {
             }
         }
         
-        // If still not found in Soar, check config
+        // If still not found in Soar, check config constants
         if (pdf1 < 0 && config != null && config.getConstants().containsKey("pdf1")) {
             Object pdf1Obj = config.getConstants().get("pdf1");
             if (pdf1Obj instanceof Number) {
@@ -332,10 +332,31 @@ public class TimeBasedTranslator {
             }
         }
         
+        // If still not found, try to extract from sickness probability table
+        // pdf1 represents P(healthy stays healthy) = P(sick=0 | sick'=0, time=0)
+        if (pdf1 < 0 && config != null && !config.getSicknessProbabilityTable().isEmpty()) {
+            // Try to get the probability for staying healthy at the first time window
+            Double prob = config.getSicknessProbabilityTable().get("0,0,0");
+            if (prob != null) {
+                pdf1 = prob;
+            } else {
+                // Try other time windows if time=0 not available
+                for (Map.Entry<String, Double> entry : config.getSicknessProbabilityTable().entrySet()) {
+                    String[] parts = entry.getKey().split(",");
+                    if (parts.length == 3 && parts[1].equals("0") && parts[2].equals("0")) {
+                        pdf1 = entry.getValue();
+                        break;
+                    }
+                }
+            }
+        }
+        
         // Fail fast if pdf1 not found
         if (pdf1 < 0) {
             throw new IllegalStateException("Cannot find pdf1 or sick_thres value in Soar rules or configuration. " +
-                "Please ensure your Soar file contains sick_thres initialization or provide a configuration file with pdf1.");
+                "Please ensure your Soar file contains sick_thres initialization, or provide a configuration file with either:\n" +
+                "  - 'pdf1' in the constants section, OR\n" +
+                "  - sicknessProbabilityTable with entries like '0,0,0' (time,currentLevel,nextLevel)");
         }
         
         sb.append(String.format("const double pdf1 = %.2f;\n", pdf1));
