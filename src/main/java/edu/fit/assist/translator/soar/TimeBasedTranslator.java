@@ -266,6 +266,20 @@ public class TimeBasedTranslator {
         output.append(generateActionModules(transitions));
         output.append("\n");
         
+        // Generate response time module (if distributions available)
+        String responseModule = generateResponseTimeModule();
+        if (!responseModule.isEmpty()) {
+            output.append(responseModule);
+            output.append("\n");
+        }
+        
+        // Generate decision error module (if distributions available)
+        String errorModule = generateDecisionErrorModule();
+        if (!errorModule.isEmpty()) {
+            output.append(errorModule);
+            output.append("\n");
+        }
+        
         // Generate rewards
         output.append(generateRewards());
         
@@ -590,6 +604,165 @@ public class TimeBasedTranslator {
     }
     
     /**
+     * Generate response time module using loaded distributions
+     * Integrates responseSelect and responseDecide distributions from config
+     */
+    private String generateResponseTimeModule() {
+        if (config == null || 
+            (config.getResponseSelect().isEmpty() && config.getResponseDecide().isEmpty())) {
+            return ""; // No response distributions available
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n// ---- Response Time Modeling ----\n");
+        sb.append("module response_time\n");
+        sb.append("  response_state : [0..60] init 0;  // 0 = idle, 1-60 = responding\n");
+        sb.append("  response_type  : [0..2] init 0;   // 0 = none, 1 = select, 2 = decide\n\n");
+        
+        // Generate select response transitions
+        if (!config.getResponseSelect().isEmpty()) {
+            sb.append("  // ---- Scan-and-Select Response Distribution ----\n");
+            sb.append("  // Triggered when action transitions to selecting state\n");
+            
+            // Use sickness level 0 (healthy) distribution as example
+            PrismConfig.Distribution selectDist = config.getResponseSelect().get("sickness0");
+            if (selectDist != null && selectDist.probabilities != null) {
+                sb.append("  [sync] action=3 & response_state=0 & sick=0 ->\n");
+                for (int i = 0; i < selectDist.probabilities.size(); i++) {
+                    PrismConfig.Distribution.StateProb sp = selectDist.probabilities.get(i);
+                    sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=1)",
+                        sp.probability, sp.state));
+                    if (i < selectDist.probabilities.size() - 1) {
+                        sb.append(" +\n");
+                    } else {
+                        sb.append(";\n");
+                    }
+                }
+                sb.append("\n");
+            }
+            
+            // Sick agent has different distribution
+            PrismConfig.Distribution selectSickDist = config.getResponseSelect().get("sickness1");
+            if (selectSickDist != null && selectSickDist.probabilities != null) {
+                sb.append("  [sync] action=3 & response_state=0 & sick=1 ->\n");
+                for (int i = 0; i < selectSickDist.probabilities.size(); i++) {
+                    PrismConfig.Distribution.StateProb sp = selectSickDist.probabilities.get(i);
+                    sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=1)",
+                        sp.probability, sp.state));
+                    if (i < selectSickDist.probabilities.size() - 1) {
+                        sb.append(" +\n");
+                    } else {
+                        sb.append(";\n");
+                    }
+                }
+                sb.append("\n");
+            }
+        }
+        
+        // Generate decide response transitions
+        if (!config.getResponseDecide().isEmpty()) {
+            sb.append("  // ---- Decision Response Distribution ----\n");
+            sb.append("  // Triggered when action transitions to deciding state\n");
+            
+            // Healthy agent decision response
+            PrismConfig.Distribution decideDist = config.getResponseDecide().get("sickness0");
+            if (decideDist != null && decideDist.probabilities != null) {
+                sb.append("  [sync] action=0 & response_state=0 & sick=0 ->\n");
+                for (int i = 0; i < decideDist.probabilities.size(); i++) {
+                    PrismConfig.Distribution.StateProb sp = decideDist.probabilities.get(i);
+                    sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=2)",
+                        sp.probability, sp.state));
+                    if (i < decideDist.probabilities.size() - 1) {
+                        sb.append(" +\n");
+                    } else {
+                        sb.append(";\n");
+                    }
+                }
+                sb.append("\n");
+            }
+            
+            // Sick agent decision response
+            PrismConfig.Distribution decideSickDist = config.getResponseDecide().get("sickness1");
+            if (decideSickDist != null && decideSickDist.probabilities != null) {
+                sb.append("  [sync] action=0 & response_state=0 & sick=1 ->\n");
+                for (int i = 0; i < decideSickDist.probabilities.size(); i++) {
+                    PrismConfig.Distribution.StateProb sp = decideSickDist.probabilities.get(i);
+                    sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=2)",
+                        sp.probability, sp.state));
+                    if (i < decideSickDist.probabilities.size() - 1) {
+                        sb.append(" +\n");
+                    } else {
+                        sb.append(";\n");
+                    }
+                }
+                sb.append("\n");
+            }
+        }
+        
+        // Response completion - response state decrements each time step
+        sb.append("  // ---- Response Progress ----\n");
+        sb.append("  [sync] response_state > 0 -> (response_state' = response_state - 1);\n\n");
+        
+        // Idle state
+        sb.append("  // ---- Idle State ----\n");
+        sb.append("  [sync] response_state = 0 & response_type > 0 ->\n");
+        sb.append("    (response_state' = 0) & (response_type' = 0);\n\n");
+        
+        sb.append("  // ---- Default ----\n");
+        sb.append("  [sync] response_state = 0 & response_type = 0 & action != 0 & action != 3 ->\n");
+        sb.append("    (response_state' = response_state) & (response_type' = response_type);\n");
+        
+        sb.append("endmodule\n");
+        return sb.toString();
+    }
+    
+    /**
+     * Generate decision error tracking module using loaded error distributions
+     * Models decision correctness based on sickness level
+     */
+    private String generateDecisionErrorModule() {
+        if (config == null || config.getDecisionErrorDistributions().isEmpty()) {
+            return ""; // No error distributions available
+        }
+        
+        StringBuilder sb = new StringBuilder();
+        sb.append("\n// ---- Decision Error Modeling ----\n");
+        sb.append("module decision_errors\n");
+        sb.append("  decision_correct : [0..1] init 1;  // 1 = correct, 0 = error\n");
+        sb.append("  error_count      : [0..10] init 0; // Track cumulative errors\n\n");
+        
+        // Get error distributions for different sickness levels
+        PrismConfig.ErrorDistribution healthyDist = config.getDecisionErrorDistributions().get("sickness0");
+        PrismConfig.ErrorDistribution sickDist = config.getDecisionErrorDistributions().get("sickness1");
+        
+        sb.append("  // ---- Decision Correctness Sampling ----\n");
+        sb.append("  // Sample when deciding (action=0) and response completes\n\n");
+        
+        if (healthyDist != null) {
+            sb.append("  // Healthy agent decision correctness\n");
+            sb.append("  [sync] action=0 & response_state=1 & sick=0 ->\n");
+            sb.append(String.format("    %.10f : (decision_correct'=1) +\n", healthyDist.correctProbability));
+            sb.append(String.format("    %.10f : (decision_correct'=0) & (error_count'=min(error_count+1,10));\n\n",
+                healthyDist.errorProbability));
+        }
+        
+        if (sickDist != null) {
+            sb.append("  // Sick agent decision correctness\n");
+            sb.append("  [sync] action=0 & response_state=1 & sick=1 ->\n");
+            sb.append(String.format("    %.10f : (decision_correct'=1) +\n", sickDist.correctProbability));
+            sb.append(String.format("    %.10f : (decision_correct'=0) & (error_count'=min(error_count+1,10));\n\n",
+                sickDist.errorProbability));
+        }
+        
+        sb.append("  // ---- Default State Maintenance ----\n");
+        sb.append("  [sync] !(action=0 & response_state=1) ->\n");
+        sb.append("    (decision_correct' = decision_correct) & (error_count' = error_count);\n");
+        
+        sb.append("endmodule\n");
+        return sb.toString();
+    }
+    
+    /**
      * Generate action modules (placeholder for extensibility)
      */
     /**
@@ -845,14 +1018,46 @@ public class TimeBasedTranslator {
     
     /**
      * Generate reward structures
+     * Provides rewards for mission completion, decision quality, and time efficiency
      */
     private String generateRewards() {
         StringBuilder sb = new StringBuilder();
-        sb.append("// Reward structures can be added here\n");
-        sb.append("// Example:\n");
-        sb.append("// rewards \"mission_completion\"\n");
-        sb.append("//   time_counter = TOTAL_TIME: 1;\n");
-        sb.append("// endrewards\n");
+        sb.append("\n// ---- Reward Structures ----\n");
+        
+        // Mission completion reward
+        sb.append("rewards \"mission_completion\"\n");
+        sb.append("  time_counter = TOTAL_TIME : 1;\n");
+        sb.append("endrewards\n\n");
+        
+        // Decision quality reward (if error tracking is enabled)
+        if (config != null && !config.getDecisionErrorDistributions().isEmpty()) {
+            sb.append("rewards \"decision_quality\"\n");
+            sb.append("  decision_correct = 1 : 1;\n");
+            sb.append("  decision_correct = 0 : -1;\n");
+            sb.append("endrewards\n\n");
+            
+            sb.append("rewards \"error_penalty\"\n");
+            sb.append("  decision_correct = 0 : 10;\n");
+            sb.append("endrewards\n\n");
+        }
+        
+        // Time efficiency reward (penalize time spent)
+        sb.append("rewards \"time_cost\"\n");
+        sb.append("  time_counter < TOTAL_TIME : 1;\n");
+        sb.append("endrewards\n\n");
+        
+        // Response time reward (if response tracking is enabled)
+        if (config != null && !config.getResponseSelect().isEmpty()) {
+            sb.append("rewards \"response_efficiency\"\n");
+            sb.append("  response_state > 0 : 1;\n");
+            sb.append("endrewards\n\n");
+        }
+        
+        // Sickness penalty
+        sb.append("rewards \"sickness_penalty\"\n");
+        sb.append("  sick = 1 : 1;\n");
+        sb.append("endrewards\n");
+        
         return sb.toString();
     }
     
