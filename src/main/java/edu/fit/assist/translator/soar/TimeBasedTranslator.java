@@ -27,9 +27,41 @@ public class TimeBasedTranslator {
     private Map<String, Object> constantValues = new LinkedHashMap<>();
     private PrismConfig config = null;
     
-    // Module constants
+    // Extracted variable information from Soar
+    private Map<String, VariableInfo> stateVariables = new LinkedHashMap<>();
+    private Map<String, Integer> monitorConstants = new LinkedHashMap<>();
+    private int minAction = Integer.MAX_VALUE;
+    private int maxAction = Integer.MIN_VALUE;
+    private int selectActionTrigger = -1;
+    private int decideActionTrigger = -1;
+    private int maxResponseState = 60;
+    
+    // Module constants (fallback if not extracted)
     private static final int MISSION_MONITOR = 0;
     private static final int SICKNESS_MONITOR = 1;
+    
+    /**
+     * Internal class to store variable metadata extracted from Soar
+     */
+    private static class VariableInfo {
+        String name;
+        int minValue;
+        int maxValue;
+        int initValue;
+        String type; // "int" or "boolean" inferred from range
+        
+        VariableInfo(String name, int minValue, int maxValue, int initValue) {
+            this.name = name;
+            this.minValue = minValue;
+            this.maxValue = maxValue;
+            this.initValue = initValue;
+            this.type = (maxValue == 1) ? "boolean" : "int";
+        }
+        
+        String getPrismDeclaration() {
+            return String.format("%s : [%d..%d] init %d", name, minValue, maxValue, initValue);
+        }
+    }
     
     public TimeBasedTranslator(SoarRules rules) {
         this.rules = rules;
@@ -125,6 +157,219 @@ public class TimeBasedTranslator {
                 "No time-based guards or operations found. " +
                 "Please ensure your Soar file contains time-counter comparisons or provide a configuration file.");
         }
+        
+        // Extract state variables and their metadata from Soar
+        extractStateVariables();
+        
+        // Extract action range from transitions
+        extractActionRange();
+        
+        // Extract action triggers for response module
+        extractActionTriggers();
+    }
+    
+    /**
+     * Extract all state variables from apply*initialize rule
+     * Builds metadata including name, range, and initial value
+     */
+    private void extractStateVariables() {
+        for (Rule rule : rules.rules) {
+            if (rule.ruleName.equals("apply*initialize")) {
+                // Extract state variables from valueMap
+                for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
+                    String varName = entry.getKey();
+                    String varValue = entry.getValue();
+                    
+                    // Skip special variables
+                    if (varName.equals("total-time") || varName.equals("time-counter")) {
+                        continue;
+                    }
+                    
+                    try {
+                        int initValue = parseInitValue(varValue);
+                        
+                        // Infer range based on variable name and init value
+                        int minValue = 0;
+                        int maxValue = inferMaxValue(varName, initValue);
+                        
+                        // Store variable info
+                        stateVariables.put(varName, new VariableInfo(varName, minValue, maxValue, initValue));
+                        
+                        // Special handling for monitor constants
+                        if (varName.equals("name")) {
+                            extractMonitorConstants(rule);
+                        }
+                        
+                    } catch (NumberFormatException e) {
+                        // Not a numeric variable, skip
+                        System.out.println("DEBUG: Skipping non-numeric variable: " + varName + " = " + varValue);
+                    }
+                }
+                break;
+            }
+        }
+    }
+    
+    /**
+     * Parse initialization value from Soar (handles "yes", "no", numbers, etc.)
+     */
+    private int parseInitValue(String value) throws NumberFormatException {
+        if (value == null) throw new NumberFormatException("null value");
+        
+        // Handle boolean-like values
+        if (value.equals("yes") || value.equals("true")) return 1;
+        if (value.equals("no") || value.equals("false")) return 0;
+        
+        // Handle monitor names
+        if (value.equals("mission-monitor")) return 0;
+        if (value.equals("sickness-monitor")) return 1;
+        
+        // Parse as number
+        return Integer.parseInt(value.trim());
+    }
+    
+    /**
+     * Infer maximum value for a variable based on its name and init value
+     */
+    private int inferMaxValue(String varName, int initValue) {
+        // Check if variable appears in rules to find max value
+        int maxFound = initValue;
+        
+        for (Rule rule : rules.rules) {
+            // Check guards and valueMap for this variable
+            for (String guard : rule.guards) {
+                if (guard.contains(varName)) {
+                    // Try to extract comparison values
+                    String[] parts = guard.split("[=<>]");
+                    for (String part : parts) {
+                        try {
+                            int val = Integer.parseInt(part.trim());
+                            maxFound = Math.max(maxFound, val);
+                        } catch (NumberFormatException e) {
+                            // Not a number
+                        }
+                    }
+                }
+            }
+            
+            // Check valueMap
+            if (rule.valueMap.containsKey(varName)) {
+                try {
+                    int val = parseInitValue(rule.valueMap.get(varName));
+                    maxFound = Math.max(maxFound, val);
+                } catch (NumberFormatException e) {
+                    // Not a number
+                }
+            }
+        }
+        
+        // Default to 1 for boolean-like variables
+        if (maxFound == 0 || maxFound == 1) return 1;
+        
+        return maxFound;
+    }
+    
+    /**
+     * Extract monitor constant values from init rule
+     */
+    private void extractMonitorConstants(Rule rule) {
+        // Find monitor constant definitions
+        for (String guard : rule.guards) {
+            if (guard.contains("mission-monitor") || guard.contains("sickness-monitor")) {
+                // Extract from guards or valueMap
+            }
+        }
+        
+        // Use standard values if not found
+        monitorConstants.put("mission_monitor", 0);
+        monitorConstants.put("sickness_monitor", 1);
+    }
+    
+    /**
+     * Extract action range from transition rules
+     */
+    private void extractActionRange() {
+        List<TransitionInfo> transitions = extractTransitionRules();
+        
+        for (TransitionInfo trans : transitions) {
+            if (trans.toAction >= 0) {
+                minAction = Math.min(minAction, trans.toAction);
+                maxAction = Math.max(maxAction, trans.toAction);
+            }
+            if (trans.fromAction >= 0) {
+                minAction = Math.min(minAction, trans.fromAction);
+                maxAction = Math.max(maxAction, trans.fromAction);
+            }
+            if (trans.fromActions != null) {
+                for (int action : trans.fromActions) {
+                    minAction = Math.min(minAction, action);
+                    maxAction = Math.max(maxAction, action);
+                }
+            }
+        }
+        
+        // Also check init value if action variable exists
+        if (stateVariables.containsKey("action")) {
+            int initAction = stateVariables.get("action").initValue;
+            minAction = Math.min(minAction, initAction);
+            maxAction = Math.max(maxAction, initAction);
+        }
+        
+        // If no transitions found, fall back to extracted state variable
+        if (minAction == Integer.MAX_VALUE || maxAction == Integer.MIN_VALUE) {
+            minAction = 0;
+            maxAction = stateVariables.containsKey("action") ? stateVariables.get("action").maxValue : 3;
+        }
+    }
+    
+    /**
+     * Extract action triggers for response module
+     * Determines which actions trigger select vs decide responses
+     */
+    private void extractActionTriggers() {
+        // Extract max response state from config distributions
+        if (config != null) {
+            for (PrismConfig.Distribution dist : config.getResponseSelect().values()) {
+                if (dist != null && dist.probabilities != null) {
+                    for (PrismConfig.Distribution.StateProb sp : dist.probabilities) {
+                        maxResponseState = Math.max(maxResponseState, sp.state);
+                    }
+                }
+            }
+            for (PrismConfig.Distribution dist : config.getResponseDecide().values()) {
+                if (dist != null && dist.probabilities != null) {
+                    for (PrismConfig.Distribution.StateProb sp : dist.probabilities) {
+                        maxResponseState = Math.max(maxResponseState, sp.state);
+                    }
+                }
+            }
+        }
+        
+        // Infer which actions trigger select vs decide from transition names
+        // Scan-and-Select typically corresponds to initial/highest action state
+        // Deciding corresponds to lower action values
+        selectActionTrigger = maxAction; // Default: highest state
+        decideActionTrigger = 0; // Default: lowest state
+        
+        // Try to infer from transition names
+        List<TransitionInfo> transitions = extractTransitionRules();
+        for (TransitionInfo trans : transitions) {
+            String name = trans.transitionName.toLowerCase();
+            if (name.contains("ss") || name.contains("select") || name.contains("scan")) {
+                // This transition goes TO selecting state
+                if (trans.toAction >= 0) {
+                    selectActionTrigger = trans.toAction;
+                }
+            }
+            if (name.contains("d-") || name.contains("decid")) {
+                // This transition goes TO deciding state
+                if (trans.toAction >= 0) {
+                    decideActionTrigger = trans.toAction;
+                }
+            }
+        }
+        
+        System.out.println("DEBUG: Extracted action triggers - select=" + selectActionTrigger + ", decide=" + decideActionTrigger);
     }
     
     /**
@@ -487,8 +732,12 @@ public class TimeBasedTranslator {
                 "Please provide initial action in one of these locations.");
         }
         
-        // Action: 0=Deciding, 1=Decided, 2=Scan-and-Select (from DD), 3=Scan-and-Select (initial)
-        sb.append(String.format("  action : [0..3] init %d;\n", initAction));
+        // Use extracted action range instead of hardcoded [0..3]
+        int actionMin = (minAction != Integer.MAX_VALUE) ? minAction : 0;
+        int actionMax = (maxAction != Integer.MIN_VALUE) ? maxAction : 3;
+        
+        // Generate action variable declaration with extracted/inferred range
+        sb.append(String.format("  action : [%d..%d] init %d;\n", actionMin, actionMax, initAction));
         sb.append("\n");
         
         // Generate transitions for each action module - action_state listens for signals
@@ -529,15 +778,50 @@ public class TimeBasedTranslator {
     /**
      * Generate the sickness monitoring module
      */
+    /**
+     * Generate the sickness monitoring module using extracted variable information
+     */
     private String generateSicknessModule() {
         StringBuilder sb = new StringBuilder();
         sb.append("module sickness\n");
         
-        // State variables
-        sb.append("  name             : [0..1] init mission_monitor;\n");
-        sb.append("  sick             : [0..1] init 0;\n");
-        sb.append("  ts               : [0..1] init 0;\n");
-        sb.append("  sickness_checked : [0..1] init 0;\n\n");
+        // State variables - use extracted info instead of hardcoded
+        // Generate variable declarations from extracted state variables
+        String[] sicknessVars = {"name", "sick", "ts", "sickness-checked"};
+        for (String varName : sicknessVars) {
+            // Try to find with both dash and underscore versions
+            String key = varName;
+            if (!stateVariables.containsKey(key)) {
+                key = varName.replace("-", "_");
+            }
+            if (!stateVariables.containsKey(key)) {
+                key = varName.replace("_", "-");
+            }
+            
+            if (stateVariables.containsKey(key)) {
+                VariableInfo var = stateVariables.get(key);
+                // Use the PRISM-compatible name (with underscore)
+                String prismName = key.replace("-", "_");
+                sb.append(String.format("  %-16s : [%d..%d] init ", prismName, var.minValue, var.maxValue));
+                
+                // Handle init value - special case for 'name' which should init to mission_monitor
+                if (prismName.equals("name")) {
+                    sb.append("mission_monitor;\n");
+                } else {
+                    sb.append(String.format("%d;\n", var.initValue));
+                }
+            } else {
+                // Fallback to hardcoded if variable not found in Soar
+                System.err.println("WARNING: Variable '" + varName + "' not found in Soar, using defaults");
+                String prismName = varName.replace("-", "_");
+                if (prismName.equals("name")) {
+                    sb.append(String.format("  %-16s : [0..1] init mission_monitor;\n", prismName));
+                } else {
+                    sb.append(String.format("  %-16s : [0..1] init 0;\n", prismName));
+                }
+            }
+        }
+        sb.append("\n");
         
         sb.append("  // ---- commit at window end ----\n");
         // Generate commit transitions at window ends
@@ -607,6 +891,7 @@ public class TimeBasedTranslator {
     /**
      * Generate response time module using loaded distributions
      * Integrates responseSelect and responseDecide distributions from config
+     * Extracts max response state and action triggers dynamically
      */
     private String generateResponseTimeModule() {
         if (config == null || 
@@ -614,16 +899,18 @@ public class TimeBasedTranslator {
             return ""; // No response distributions available
         }
         
+        // Use class variables for action triggers and max response state (already extracted in extractActionTriggers)
         StringBuilder sb = new StringBuilder();
         sb.append("\n// ---- Response Time Modeling ----\n");
         sb.append("module response_time\n");
-        sb.append("  response_state : [0..60] init 0;  // 0 = idle, 1-60 = responding\n");
+        sb.append(String.format("  response_state : [0..%d] init 0;  // 0 = idle, 1-%d = responding\n", 
+            maxResponseState, maxResponseState));
         sb.append("  response_type  : [0..2] init 0;   // 0 = none, 1 = select, 2 = decide\n\n");
         
         // Generate select response transitions
         if (!config.getResponseSelect().isEmpty()) {
             sb.append("  // ---- Scan-and-Select Response Distribution ----\n");
-            sb.append("  // Triggered when action transitions to selecting state\n");
+            sb.append(String.format("  // Triggered when action=%d (selecting state)\n", selectActionTrigger));
             
             // Use sickness level 0 (healthy) distribution as example
             PrismConfig.Distribution selectDist = config.getResponseSelect().get("sickness0");
@@ -634,7 +921,7 @@ public class TimeBasedTranslator {
                     totalProb += sp.probability;
                 }
                 
-                sb.append("  [sync] action=3 & response_state=0 & sick=0 ->\n");
+                sb.append(String.format("  [sync] action=%d & response_state=0 & sick=0 ->\n", selectActionTrigger));
                 for (int i = 0; i < selectDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = selectDist.probabilities.get(i);
                     double normalizedProb = sp.probability / totalProb;
@@ -658,7 +945,7 @@ public class TimeBasedTranslator {
                     totalProb += sp.probability;
                 }
                 
-                sb.append("  [sync] action=3 & response_state=0 & sick=1 ->\n");
+                sb.append(String.format("  [sync] action=%d & response_state=0 & sick=1 ->\n", selectActionTrigger));
                 for (int i = 0; i < selectSickDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = selectSickDist.probabilities.get(i);
                     double normalizedProb = sp.probability / totalProb;
@@ -688,7 +975,7 @@ public class TimeBasedTranslator {
                     totalProb += sp.probability;
                 }
                 
-                sb.append("  [sync] action=0 & response_state=0 & sick=0 ->\n");
+                sb.append(String.format("  [sync] action=%d & response_state=0 & sick=0 ->\n", decideActionTrigger));
                 for (int i = 0; i < decideDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = decideDist.probabilities.get(i);
                     double normalizedProb = sp.probability / totalProb;
@@ -712,7 +999,7 @@ public class TimeBasedTranslator {
                     totalProb += sp.probability;
                 }
                 
-                sb.append("  [sync] action=0 & response_state=0 & sick=1 ->\n");
+                sb.append(String.format("  [sync] action=%d & response_state=0 & sick=1 ->\n", decideActionTrigger));
                 for (int i = 0; i < decideSickDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = decideSickDist.probabilities.get(i);
                     double normalizedProb = sp.probability / totalProb;
@@ -738,7 +1025,8 @@ public class TimeBasedTranslator {
         sb.append("    (response_state' = 0) & (response_type' = 0);\n\n");
         
         sb.append("  // ---- Default ----\n");
-        sb.append("  [sync] response_state = 0 & response_type = 0 & action != 0 & action != 3 ->\n");
+        sb.append(String.format("  [sync] response_state = 0 & response_type = 0 & action != %d & action != %d ->\n", 
+            decideActionTrigger, selectActionTrigger));
         sb.append("    (response_state' = response_state) & (response_type' = response_type);\n");
         
         sb.append("endmodule\n");
@@ -765,11 +1053,11 @@ public class TimeBasedTranslator {
         PrismConfig.ErrorDistribution sickDist = config.getDecisionErrorDistributions().get("sickness1");
         
         sb.append("  // ---- Decision Correctness Sampling ----\n");
-        sb.append("  // Sample when deciding (action=0) and response completes\n\n");
+        sb.append(String.format("  // Sample when deciding (action=%d) and response completes\n\n", decideActionTrigger));
         
         if (healthyDist != null) {
             sb.append("  // Healthy agent decision correctness\n");
-            sb.append("  [sync] action=0 & response_state=1 & sick=0 ->\n");
+            sb.append(String.format("  [sync] action=%d & response_state=1 & sick=0 ->\n", decideActionTrigger));
             sb.append(String.format("    %.10f : (decision_correct'=1) +\n", healthyDist.correctProbability));
             sb.append(String.format("    %.10f : (decision_correct'=0) & (error_count'=min(error_count+1,10));\n\n",
                 healthyDist.errorProbability));
@@ -777,14 +1065,14 @@ public class TimeBasedTranslator {
         
         if (sickDist != null) {
             sb.append("  // Sick agent decision correctness\n");
-            sb.append("  [sync] action=0 & response_state=1 & sick=1 ->\n");
+            sb.append(String.format("  [sync] action=%d & response_state=1 & sick=1 ->\n", decideActionTrigger));
             sb.append(String.format("    %.10f : (decision_correct'=1) +\n", sickDist.correctProbability));
             sb.append(String.format("    %.10f : (decision_correct'=0) & (error_count'=min(error_count+1,10));\n\n",
                 sickDist.errorProbability));
         }
         
         sb.append("  // ---- Default State Maintenance ----\n");
-        sb.append("  [sync] !(action=0 & response_state=1) ->\n");
+        sb.append(String.format("  [sync] !(action=%d & response_state=1) ->\n", decideActionTrigger));
         sb.append("    (decision_correct' = decision_correct) & (error_count' = error_count);\n");
         
         sb.append("endmodule\n");
