@@ -1,0 +1,139 @@
+{
+  "model": {
+    "type": "dtmc",
+    "maxErrorCount": 5,
+    "modelResolution": 1.0,
+    "experimentDuration": 1200,
+    "sicknessSamplingInterval": 300,
+    "sicknessLevels": 2,
+    "responseDuration": 60
+  },
+  "sicknessProbabilityTable": {
+    "0,0,0": 0.9,
+    "0,0,1": 0.1,
+    "0,1,0": 0.0,
+    "0,1,1": 1.0,
+    "300,0,0": 0.88,
+    "300,0,1": 0.12,
+    "300,1,0": 0.05,
+    "300,1,1": 0.95,
+    "600,0,0": 0.85,
+    "600,0,1": 0.15,
+    "600,1,0": 0.1,
+    "600,1,1": 0.9,
+    "900,0,0": 0.82,
+    "900,0,1": 0.18,
+    "900,1,0": 0.12,
+    "900,1,1": 0.88,
+    "1200,0,0": 0.8,
+    "1200,0,1": 0.2,
+    "1200,1,0": 0.15,
+    "1200,1,1": 0.85
+  },
+  "responseSelect": {
+    "sickness0": {
+      "type": "discrete",
+      "states": 61,
+      "probabilities": [
+        {"state": 0, "probability": 0.048770575499285984},
+        {"state": 1, "probability": 0.0463920064647545},
+        {"state": 2, "probability": 0.044149537099106535},
+        {"state": 3, "probability": 0.042037159336668585},
+        {"state": 4, "probability": 0.040049358846363635},
+        {"state": 5, "probability": 0.038181658826655634},
+        {"state": 10, "probability": 0.029925997632239643},
+        {"state": 15, "probability": 0.023453797490246776},
+        {"state": 20, "probability": 0.018390785479641625},
+        {"state": 25, "probability": 0.014426949158691618},
+        {"state": 30, "probability": 0.011315176140275495},
+        {"state": 35, "probability": 0.008873415339061783},
+        {"state": 40, "probability": 0.006958923907701024},
+        {"state": 45, "probability": 0.005456577301849394},
+        {"state": 50, "probability": 0.004277267999350495},
+        {"state": 55, "probability": 0.0033543736494502886},
+        {"state": 60, "probability": 0.0026302679199892503}
+      ]
+    },
+    "sickness1": {
+      "type": "discrete",
+      "states": 61,
+      "probabilities": [
+        {"state": 0, "probability": 0.009950166250831893},
+        {"state": 1, "probability": 0.009851160442412854},
+        {"state": 2, "probability": 0.009753145078440045},
+        {"state": 3, "probability": 0.009656106517724604},
+        {"state": 4, "probability": 0.009560030233940457},
+        {"state": 5, "probability": 0.009464901813703894},
+        {"state": 10, "probability": 0.008986617097870641},
+        {"state": 15, "probability": 0.008536489342979883},
+        {"state": 20, "probability": 0.008112985396795588},
+        {"state": 25, "probability": 0.007714613649206486},
+        {"state": 30, "probability": 0.007339921488874568},
+        {"state": 35, "probability": 0.006987495474034298},
+        {"state": 40, "probability": 0.006655959434391832},
+        {"state": 45, "probability": 0.006343970558033085},
+        {"state": 50, "probability": 0.006050217554598453},
+        {"state": 55, "probability": 0.005773418554398295},
+        {"state": 60, "probability": 0.00551232233954161}
+      ]
+    }
+  },
+  "responseDecide": {
+    "sickness0": {
+      "type": "discrete",
+      "states": 61,
+      "probabilities": [
+        {"state": 0, "probability": 0.019801326693244747},
+        {"state": 1, "probability": 0.019409234154432076},
+        {"state": 2, "probability": 0.01902757894965857},
+        {"state": 3, "probability": 0.018656213386823395},
+        {"state": 4, "probability": 0.018295114975851516},
+        {"state": 5, "probability": 0.017944148993931617},
+        {"state": 10, "probability": 0.015330865886341043},
+        {"state": 15, "probability": 0.013102686156922046},
+        {"state": 20, "probability": 0.011198224852222703},
+        {"state": 25, "probability": 0.009566525573065434},
+        {"state": 30, "probability": 0.008165349921092603},
+        {"state": 35, "probability": 0.006968086678152866},
+        {"state": 40, "probability": 0.005963842732816826},
+        {"state": 45, "probability": 0.0050945577803366245},
+        {"state": 50, "probability": 0.004349659415250297},
+        {"state": 55, "probability": 0.0037181128773093253},
+        {"state": 60, "probability": 0.003182239339850842}
+      ]
+    },
+    "sickness1": {
+      "type": "discrete",
+      "states": 61,
+      "probabilities": [
+        {"state": 0, "probability": 0.009950166250831893},
+        {"state": 1, "probability": 0.009851160442412854},
+        {"state": 2, "probability": 0.009753145078440045},
+        {"state": 3, "probability": 0.009656106517724604},
+        {"state": 4, "probability": 0.009560030233940457},
+        {"state": 5, "probability": 0.009464901813703894},
+        {"state": 10, "probability": 0.008986617097870641},
+        {"state": 15, "probability": 0.008536489342979883},
+        {"state": 20, "probability": 0.008112985396795588},
+        {"state": 25, "probability": 0.007714613649206486},
+        {"state": 30, "probability": 0.007339921488874568},
+        {"state": 35, "probability": 0.006987495474034298},
+        {"state": 40, "probability": 0.006655959434391832},
+        {"state": 45, "probability": 0.006343970558033085},
+        {"state": 50, "probability": 0.006050217554598453},
+        {"state": 55, "probability": 0.005773418554398295},
+        {"state": 60, "probability": 0.00551232233954161}
+      ]
+    }
+  },
+  "decisionErrorDistributions": {
+    "sickness0": {
+      "correctProbability": 0.999,
+      "errorProbability": 0.001
+    },
+    "sickness1": {
+      "correctProbability": 0.995,
+      "errorProbability": 0.005
+    }
+  }
+}
