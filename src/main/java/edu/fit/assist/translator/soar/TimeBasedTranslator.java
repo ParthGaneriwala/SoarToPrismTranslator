@@ -445,27 +445,20 @@ public class TimeBasedTranslator {
             }
         }
         
-        // Infer which actions trigger select vs decide from transition names
-        // Scan-and-Select typically corresponds to initial/highest action state
-        // Deciding corresponds to lower action values
-        selectActionTrigger = maxAction; // Default: highest state
-        decideActionTrigger = 0; // Default: lowest state
+        // Infer which actions trigger select vs decide from transition names  
+        // Default assumptions based on cognitive architecture patterns:
+        // - Initial/highest action state = selecting/scanning (before any transition)
+        // - Lower action states = deciding, decided, etc.
+        selectActionTrigger = maxAction; // Selecting happens in initial state
+        decideActionTrigger = 0; // Deciding happens in state 0 (typical after SS transition)
         
-        // Try to infer from transition names
+        // Refine based on explicit transition guards
         List<TransitionInfo> transitions = extractTransitionRules();
         for (TransitionInfo trans : transitions) {
             String name = trans.transitionName.toLowerCase();
-            if (name.contains("ss") || name.contains("select") || name.contains("scan")) {
-                // This transition goes TO selecting state
-                if (trans.toAction >= 0) {
-                    selectActionTrigger = trans.toAction;
-                }
-            }
-            if (name.contains("d-") || name.contains("decid")) {
-                // This transition goes TO deciding state
-                if (trans.toAction >= 0) {
-                    decideActionTrigger = trans.toAction;
-                }
+            // D transition explicitly states which action it comes from
+            if ((name.startsWith("d-") || name.equals("d")) && !name.contains("dd") && trans.fromAction >= 0) {
+                decideActionTrigger = trans.fromAction;  // D transition: deciding happens FROM this state
             }
         }
         
