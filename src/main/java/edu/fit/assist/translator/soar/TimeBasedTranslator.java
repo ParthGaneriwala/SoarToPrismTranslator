@@ -841,6 +841,14 @@ public class TimeBasedTranslator {
         int actionMin = (minAction != Integer.MAX_VALUE) ? minAction : 0;
         int actionMax = (maxAction != Integer.MIN_VALUE) ? maxAction : 3;
         
+        // Ensure action range includes the init value
+        if (initAction > actionMax) {
+            actionMax = initAction;
+        }
+        if (initAction < actionMin) {
+            actionMin = initAction;
+        }
+        
         // Generate action variable declaration with extracted/inferred range
         String actionVar = getActionVarName();
         sb.append(String.format("  %s : [%d..%d] init %d;\n", actionVar, actionMin, actionMax, initAction));
@@ -901,23 +909,14 @@ public class TimeBasedTranslator {
         // Generate variable declarations from extracted state variables
         String[] varReferences = {nameVar, sickVar, tsVar, sicknessCheckedVar};
         for (String varRef : varReferences) {
-            // Try to find with both dash and underscore versions
-            String key = varRef;
-            if (!stateVariables.containsKey(key)) {
-                key = varRef.replace("-", "_");
-            }
-            if (!stateVariables.containsKey(key)) {
-                key = varRef.replace("_", "-");
-            }
-            
-            if (stateVariables.containsKey(key)) {
-                VariableInfo var = stateVariables.get(key);
-                // Use the PRISM-compatible name (with underscore)
-                String prismName = key.replace("-", "_");
-                sb.append(String.format("  %-16s : [%d..%d] init ", prismName, var.minValue, var.maxValue));
+            // varRef is already normalized (from getters), use it as key
+            if (stateVariables.containsKey(varRef)) {
+                VariableInfo var = stateVariables.get(varRef);
+                // var.name is already PRISM-compatible (normalized in constructor)
+                sb.append(String.format("  %-16s : [%d..%d] init ", var.name, var.minValue, var.maxValue));
                 
                 // Handle init value - special case for 'name' which should init to mission_monitor
-                if (prismName.equals(nameVar)) {
+                if (var.name.equals(nameVar)) {
                     sb.append("mission_monitor;\n");
                 } else {
                     sb.append(String.format("%d;\n", var.initValue));
@@ -925,11 +924,10 @@ public class TimeBasedTranslator {
             } else {
                 // Fallback to hardcoded if variable not found in Soar
                 System.err.println("WARNING: Variable '" + varRef + "' not found in Soar, using defaults");
-                String prismName = varRef.replace("-", "_");
-                if (prismName.equals(nameVar)) {
-                    sb.append(String.format("  %-16s : [0..1] init mission_monitor;\n", prismName));
+                if (varRef.equals(nameVar)) {
+                    sb.append(String.format("  %-16s : [0..1] init mission_monitor;\n", varRef));
                 } else {
-                    sb.append(String.format("  %-16s : [0..1] init 0;\n", prismName));
+                    sb.append(String.format("  %-16s : [0..1] init 0;\n", varRef));
                 }
             }
         }
@@ -1139,11 +1137,13 @@ public class TimeBasedTranslator {
         
         // Response completion - response state decrements each time step
         sb.append("  // ---- Response Progress ----\n");
-        sb.append("  [sync] response_state > 0 -> (response_state' = response_state - 1);\n\n");
+        sb.append(String.format("  [sync] response_state > 0 & !(%s=%d & response_state=0) & !(%s=%d & response_state=0) -> (response_state' = response_state - 1);\n\n", 
+            actionVar, selectActionTrigger, actionVar, decideActionTrigger));
         
-        // Idle state
+        // Idle state - reset response type when done
         sb.append("  // ---- Idle State ----\n");
-        sb.append("  [sync] response_state = 0 & response_type > 0 ->\n");
+        sb.append(String.format("  [sync] response_state = 0 & response_type > 0 & %s != %d & %s != %d ->\n", 
+            actionVar, selectActionTrigger, actionVar, decideActionTrigger));
         sb.append("    (response_state' = 0) & (response_type' = 0);\n\n");
         
         sb.append("  // ---- Default ----\n");
