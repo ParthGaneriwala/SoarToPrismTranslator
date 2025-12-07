@@ -121,8 +121,9 @@ public class TimeBasedTranslator {
         if (timeInterval != null && timeInterval > 0) {
             generateTimeWindows(timeInterval);
         } else {
-            // Fallback: use default interval of 300
-            generateTimeWindows(300);
+            throw new IllegalStateException("Cannot infer time interval from Soar rules. " +
+                "No time-based guards or operations found. " +
+                "Please ensure your Soar file contains time-counter comparisons or provide a configuration file.");
         }
     }
     
@@ -331,9 +332,10 @@ public class TimeBasedTranslator {
             }
         }
         
-        // Use default only if not found anywhere
+        // Fail fast if pdf1 not found
         if (pdf1 < 0) {
-            pdf1 = 0.9;
+            throw new IllegalStateException("Cannot find pdf1 or sick_thres value in Soar rules or configuration. " +
+                "Please ensure your Soar file contains sick_thres initialization or provide a configuration file with pdf1.");
         }
         
         sb.append(String.format("const double pdf1 = %.2f;\n", pdf1));
@@ -385,7 +387,7 @@ public class TimeBasedTranslator {
         sb.append("module action_state\n");
         
         // Extract initial action value from initialize rule
-        int initAction = 3; // default from Soar code
+        Integer initAction = null;
         for (Rule rule : rules.rules) {
             if (rule.ruleName.equals("apply*initialize")) {
                 String actionVal = rule.valueMap.get("action");
@@ -393,10 +395,16 @@ public class TimeBasedTranslator {
                     try {
                         initAction = Integer.parseInt(actionVal);
                     } catch (NumberFormatException e) {
-                        // Use default
+                        // Keep looking
                     }
                 }
             }
+        }
+        
+        // Fail fast if action not found
+        if (initAction == null) {
+            throw new IllegalStateException("Cannot find initial action value in apply*initialize rule. " +
+                "Please ensure your Soar file contains action initialization.");
         }
         
         // Action: 0=Deciding, 1=Decided, 2=Scan-and-Select (from DD), 3=Scan-and-Select (initial)
@@ -474,17 +482,39 @@ public class TimeBasedTranslator {
         
         // Switch back to mission monitor
         sb.append("  [sync] name = sickness_monitor & sickness_checked = 1 &\n");
-        sb.append("  time_counter != 0   & time_counter != 300 & time_counter != 600 &\n");
-        sb.append("  time_counter != 900 & time_counter != 1200 &\n");
-        sb.append("  time_counter != 299 & time_counter != 599 &\n");
-        sb.append("  time_counter != 899 & time_counter != 1199\n");
+        // Dynamically generate window exclusions
+        sb.append("  ");
+        for (int i = 0; i < timeWindows.size(); i++) {
+            if (i > 0) sb.append(" & ");
+            sb.append(String.format("time_counter != %d", timeWindows.get(i)));
+        }
+        sb.append(" &\n");
+        // Dynamically generate commit time exclusions
+        sb.append("  ");
+        for (int i = 0; i < commitTimes.size(); i++) {
+            if (i > 0) sb.append(" & ");
+            sb.append(String.format("time_counter != %d", commitTimes.get(i)));
+        }
+        sb.append("\n");
         sb.append("->\n");
         sb.append("  (name' = mission_monitor) & (sickness_checked' = 0);\n\n");
         
         // Generate default/else transition
         sb.append("  [sync]\n");
-        sb.append("    time_counter != 299 & time_counter != 599 & time_counter != 899 & time_counter != 1199 &\n");
-        sb.append("    !((time_counter =    0 | time_counter =  300 | time_counter =  600 | time_counter =  900 | time_counter = 1200) &\n");
+        // Dynamically generate commit time exclusions for else guard
+        sb.append("    ");
+        for (int i = 0; i < commitTimes.size(); i++) {
+            if (i > 0) sb.append(" & ");
+            sb.append(String.format("time_counter != %d", commitTimes.get(i)));
+        }
+        sb.append(" &\n");
+        // Dynamically generate window check exclusion
+        sb.append("    !((");
+        for (int i = 0; i < timeWindows.size(); i++) {
+            if (i > 0) sb.append(" | ");
+            sb.append(String.format("time_counter = %4d", timeWindows.get(i)));
+        }
+        sb.append(") &\n");
         sb.append("      name = sickness_monitor & sickness_checked = 0) &\n");
         sb.append("    !(name = sickness_monitor & sickness_checked = 1)\n");
         sb.append("  ->\n");
