@@ -933,7 +933,18 @@ public class TimeBasedTranslator {
         }
         sb.append("\n");
         
-        sb.append("  // ---- commit at window end ----\n");
+        sb.append("  // ---- reset checked flag at window starts for repeated sampling ----\n");
+        // Reset sickness_checked to 0 at the start of each window (except first)
+        for (int i = 1; i < timeWindows.size(); i++) {
+            int window = timeWindows.get(i);
+            // Reset happens 1 time step before the window
+            if (window > 0) {
+                sb.append(String.format("  [sync] time_counter = %4d & %s=mission_monitor -> (%s' = 0) & (%s' = %s) & (%s' = %s) & (%s' = %s);\n",
+                    window - 1, nameVar, sicknessCheckedVar, sickVar, sickVar, tsVar, tsVar, nameVar, nameVar));
+            }
+        }
+        
+        sb.append("\n  // ---- commit at window end ----\n");
         // Generate commit transitions at window ends - use dynamic variable names
         for (int commitTime : commitTimes) {
             sb.append(String.format("  [sync] time_counter = %4d -> (%s' = %s);\n", 
@@ -1516,7 +1527,7 @@ public class TimeBasedTranslator {
         if (config != null && !config.getDecisionErrorDistributions().isEmpty()) {
             sb.append("rewards \"decision_quality\"\n");
             sb.append("  decision_correct = 1 : 1;\n");
-            sb.append("  decision_correct = 0 : -1;\n");
+            sb.append("  decision_correct = 0 : 0;\n");  // Changed from -1 to avoid PRISM negative reward error
             sb.append("endrewards\n\n");
             
             sb.append("rewards \"error_penalty\"\n");
