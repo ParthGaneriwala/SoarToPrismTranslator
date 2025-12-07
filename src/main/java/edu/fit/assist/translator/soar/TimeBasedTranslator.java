@@ -1031,7 +1031,7 @@ public class TimeBasedTranslator {
             // Use sickness level 0 (healthy) distribution as example
             PrismConfig.Distribution selectDist = config.getResponseSelect().get("sickness0");
             if (selectDist != null && selectDist.probabilities != null) {
-                // Normalize probabilities to sum to 1.0
+                // Normalize probabilities to sum to exactly 1.0
                 double totalProb = 0.0;
                 for (PrismConfig.Distribution.StateProb sp : selectDist.probabilities) {
                     totalProb += sp.probability;
@@ -1039,9 +1039,17 @@ public class TimeBasedTranslator {
                 
                 sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=0 ->\n", 
                     actionVar, selectActionTrigger, sickVar));
+                double accumulatedProb = 0.0;
                 for (int i = 0; i < selectDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = selectDist.probabilities.get(i);
-                    double normalizedProb = sp.probability / totalProb;
+                    double normalizedProb;
+                    if (i == selectDist.probabilities.size() - 1) {
+                        // Last probability: ensure exact sum to 1.0
+                        normalizedProb = 1.0 - accumulatedProb;
+                    } else {
+                        normalizedProb = sp.probability / totalProb;
+                        accumulatedProb += normalizedProb;
+                    }
                     sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=1)",
                         normalizedProb, sp.state));
                     if (i < selectDist.probabilities.size() - 1) {
@@ -1056,17 +1064,25 @@ public class TimeBasedTranslator {
             // Sick agent has different distribution
             PrismConfig.Distribution selectSickDist = config.getResponseSelect().get("sickness1");
             if (selectSickDist != null && selectSickDist.probabilities != null) {
-                // Normalize probabilities to sum to 1.0
+                // Normalize probabilities to sum to exactly 1.0
                 double totalProb = 0.0;
                 for (PrismConfig.Distribution.StateProb sp : selectSickDist.probabilities) {
                     totalProb += sp.probability;
                 }
                 
-                sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=1 ->\n", 
+                sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=1 ->\n",
                     actionVar, selectActionTrigger, sickVar));
+                double accumulatedProb = 0.0;
                 for (int i = 0; i < selectSickDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = selectSickDist.probabilities.get(i);
-                    double normalizedProb = sp.probability / totalProb;
+                    double normalizedProb;
+                    if (i == selectSickDist.probabilities.size() - 1) {
+                        // Last probability: ensure exact sum to 1.0
+                        normalizedProb = 1.0 - accumulatedProb;
+                    } else {
+                        normalizedProb = sp.probability / totalProb;
+                        accumulatedProb += normalizedProb;
+                    }
                     sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=1)",
                         normalizedProb, sp.state));
                     if (i < selectSickDist.probabilities.size() - 1) {
@@ -1087,17 +1103,25 @@ public class TimeBasedTranslator {
             // Healthy agent decision response
             PrismConfig.Distribution decideDist = config.getResponseDecide().get("sickness0");
             if (decideDist != null && decideDist.probabilities != null) {
-                // Normalize probabilities to sum to 1.0
+                // Normalize probabilities to sum to exactly 1.0
                 double totalProb = 0.0;
                 for (PrismConfig.Distribution.StateProb sp : decideDist.probabilities) {
                     totalProb += sp.probability;
                 }
                 
-                sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=0 ->\n", 
+                sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=0 ->\n",
                     actionVar, decideActionTrigger, sickVar));
+                double accumulatedProb = 0.0;
                 for (int i = 0; i < decideDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = decideDist.probabilities.get(i);
-                    double normalizedProb = sp.probability / totalProb;
+                    double normalizedProb;
+                    if (i == decideDist.probabilities.size() - 1) {
+                        // Last probability: ensure exact sum to 1.0
+                        normalizedProb = 1.0 - accumulatedProb;
+                    } else {
+                        normalizedProb = sp.probability / totalProb;
+                        accumulatedProb += normalizedProb;
+                    }
                     sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=2)",
                         normalizedProb, sp.state));
                     if (i < decideDist.probabilities.size() - 1) {
@@ -1112,17 +1136,25 @@ public class TimeBasedTranslator {
             // Sick agent decision response
             PrismConfig.Distribution decideSickDist = config.getResponseDecide().get("sickness1");
             if (decideSickDist != null && decideSickDist.probabilities != null) {
-                // Normalize probabilities to sum to 1.0
+                // Normalize probabilities to sum to exactly 1.0
                 double totalProb = 0.0;
                 for (PrismConfig.Distribution.StateProb sp : decideSickDist.probabilities) {
                     totalProb += sp.probability;
                 }
                 
-                sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=1 ->\n", 
+                sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=1 ->\n",
                     actionVar, decideActionTrigger, sickVar));
+                double accumulatedProb = 0.0;
                 for (int i = 0; i < decideSickDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = decideSickDist.probabilities.get(i);
-                    double normalizedProb = sp.probability / totalProb;
+                    double normalizedProb;
+                    if (i == decideSickDist.probabilities.size() - 1) {
+                        // Last probability: ensure exact sum to 1.0
+                        normalizedProb = 1.0 - accumulatedProb;
+                    } else {
+                        normalizedProb = sp.probability / totalProb;
+                        accumulatedProb += normalizedProb;
+                    }
                     sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=2)",
                         normalizedProb, sp.state));
                     if (i < decideSickDist.probabilities.size() - 1) {
