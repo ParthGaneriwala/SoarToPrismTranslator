@@ -58,7 +58,8 @@ public class TimeBasedTranslator {
         String type; // "int" or "boolean" inferred from range
         
         VariableInfo(String name, int minValue, int maxValue, int initValue) {
-            this.name = name;
+            // Normalize variable name for PRISM compatibility (replace dashes with underscores)
+            this.name = normalizePrismVariableName(name);
             this.minValue = minValue;
             this.maxValue = maxValue;
             this.initValue = initValue;
@@ -68,6 +69,15 @@ public class TimeBasedTranslator {
         String getPrismDeclaration() {
             return String.format("%s : [%d..%d] init %d", name, minValue, maxValue, initValue);
         }
+    }
+    
+    /**
+     * Normalize variable names for PRISM compatibility
+     * PRISM syntax does not allow dashes in variable names, only underscores
+     */
+    private static String normalizePrismVariableName(String name) {
+        if (name == null) return null;
+        return name.replace('-', '_');
     }
     
     public TimeBasedTranslator(SoarRules rules) {
@@ -199,8 +209,9 @@ public class TimeBasedTranslator {
                         int minValue = 0;
                         int maxValue = inferMaxValue(varName, initValue);
                         
-                        // Store variable info
-                        stateVariables.put(varName, new VariableInfo(varName, minValue, maxValue, initValue));
+                        // Store variable info with normalized name as key
+                        String normalizedName = normalizePrismVariableName(varName);
+                        stateVariables.put(normalizedName, new VariableInfo(varName, minValue, maxValue, initValue));
                         
                         // Special handling for monitor constants
                         if (varName.equals("name")) {
