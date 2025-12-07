@@ -457,10 +457,10 @@ public class TimeBasedTranslator {
             
             // SS-transition: fromActions tells us which states are "selecting" states
             // Agent is in Scan-and-Select mode BEFORE this transition
-            if ((name.startsWith("ss") || name.contains("scan")) && trans.fromActions != null && trans.fromActions.length > 0) {
+            if ((name.startsWith("ss") || name.contains("scan")) && trans.fromActions != null && trans.fromActions.size() > 0) {
                 // Use the first (typically highest) fromAction as the primary select trigger
                 // In Soar: propose*SS-transition has ^action { << 3 2 >> } meaning select happens when action=3 or action=2
-                selectActionTrigger = trans.fromActions[0];  // Typically 3 (initial state)
+                selectActionTrigger = trans.fromActions.get(0);  // Typically 3 (initial state)
             }
             
             // D-transition: toAction tells us the state AFTER deciding starts
