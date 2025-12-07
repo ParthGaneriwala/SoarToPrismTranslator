@@ -407,14 +407,18 @@ public class TimeBasedTranslator {
         StringBuilder sb = new StringBuilder();
         sb.append("module action_state\n");
         
-        // Extract initial action value from initialize rule
+        // Extract initial action value from multiple sources
         Integer initAction = null;
+        
+        // 1. Try to extract from Soar apply*initialize rule
         for (Rule rule : rules.rules) {
             if (rule.ruleName.equals("apply*initialize")) {
                 String actionVal = rule.valueMap.get("action");
                 if (actionVal != null) {
                     try {
                         initAction = Integer.parseInt(actionVal);
+                        System.out.println("INFO: Found initial action=" + initAction + " in apply*initialize rule");
+                        break;
                     } catch (NumberFormatException e) {
                         // Keep looking
                     }
@@ -422,10 +426,50 @@ public class TimeBasedTranslator {
             }
         }
         
+        // 2. Try to extract from config file constants
+        if (initAction == null && config != null) {
+            Object actionObj = config.getConstants().get("initialAction");
+            if (actionObj != null) {
+                try {
+                    initAction = ((Number) actionObj).intValue();
+                    System.out.println("INFO: Found initial action=" + initAction + " in config constants");
+                } catch (Exception e) {
+                    // Keep looking
+                }
+            }
+        }
+        
+        // 3. Infer from transition rules - find highest action state and add 1
+        if (initAction == null && !transitions.isEmpty()) {
+            int maxAction = -1;
+            for (TransitionInfo trans : transitions) {
+                if (trans.toAction >= 0 && trans.toAction > maxAction) {
+                    maxAction = trans.toAction;
+                }
+                if (trans.fromActions != null) {
+                    for (Integer from : trans.fromActions) {
+                        if (from > maxAction) {
+                            maxAction = from;
+                        }
+                    }
+                }
+                if (trans.fromAction >= 0 && trans.fromAction > maxAction) {
+                    maxAction = trans.fromAction;
+                }
+            }
+            if (maxAction >= 0) {
+                initAction = maxAction + 1;  // Initial state is one beyond all transition states
+                System.out.println("INFO: Inferred initial action=" + initAction + " from transition rules (max action + 1)");
+            }
+        }
+        
         // Fail fast if action not found
         if (initAction == null) {
-            throw new IllegalStateException("Cannot find initial action value in apply*initialize rule. " +
-                "Please ensure your Soar file contains action initialization.");
+            throw new IllegalStateException("Cannot find initial action value. Tried:\n" +
+                "  1. Soar apply*initialize rule (valueMap['action'])\n" +
+                "  2. Config file constants section (initialAction)\n" +
+                "  3. Inference from transition rules (max action + 1)\n" +
+                "Please provide initial action in one of these locations.");
         }
         
         // Action: 0=Deciding, 1=Decided, 2=Scan-and-Select (from DD), 3=Scan-and-Select (initial)
