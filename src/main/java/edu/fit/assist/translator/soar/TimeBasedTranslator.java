@@ -1044,13 +1044,14 @@ public class TimeBasedTranslator {
                     PrismConfig.Distribution.StateProb sp = selectDist.probabilities.get(i);
                     double normalizedProb;
                     if (i == selectDist.probabilities.size() - 1) {
-                        // Last probability: ensure exact sum to 1.0
+                        // Last probability: ensure exact sum to 1.0 by taking complement
                         normalizedProb = 1.0 - accumulatedProb;
                     } else {
                         normalizedProb = sp.probability / totalProb;
                         accumulatedProb += normalizedProb;
                     }
-                    sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=1)",
+                    // Use %.16f for maximum precision to avoid rounding issues
+                    sb.append(String.format("    %.16f : (response_state'=%d) & (response_type'=1)",
                         normalizedProb, sp.state));
                     if (i < selectDist.probabilities.size() - 1) {
                         sb.append(" +\n");
@@ -1077,13 +1078,14 @@ public class TimeBasedTranslator {
                     PrismConfig.Distribution.StateProb sp = selectSickDist.probabilities.get(i);
                     double normalizedProb;
                     if (i == selectSickDist.probabilities.size() - 1) {
-                        // Last probability: ensure exact sum to 1.0
+                        // Last probability: ensure exact sum to 1.0 by taking complement
                         normalizedProb = 1.0 - accumulatedProb;
                     } else {
                         normalizedProb = sp.probability / totalProb;
                         accumulatedProb += normalizedProb;
                     }
-                    sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=1)",
+                    // Use %.16f for maximum precision to avoid rounding issues
+                    sb.append(String.format("    %.16f : (response_state'=%d) & (response_type'=1)",
                         normalizedProb, sp.state));
                     if (i < selectSickDist.probabilities.size() - 1) {
                         sb.append(" +\n");
@@ -1116,13 +1118,14 @@ public class TimeBasedTranslator {
                     PrismConfig.Distribution.StateProb sp = decideDist.probabilities.get(i);
                     double normalizedProb;
                     if (i == decideDist.probabilities.size() - 1) {
-                        // Last probability: ensure exact sum to 1.0
+                        // Last probability: ensure exact sum to 1.0 by taking complement
                         normalizedProb = 1.0 - accumulatedProb;
                     } else {
                         normalizedProb = sp.probability / totalProb;
                         accumulatedProb += normalizedProb;
                     }
-                    sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=2)",
+                    // Use %.16f for maximum precision to avoid rounding issues
+                    sb.append(String.format("    %.16f : (response_state'=%d) & (response_type'=2)",
                         normalizedProb, sp.state));
                     if (i < decideDist.probabilities.size() - 1) {
                         sb.append(" +\n");
@@ -1149,13 +1152,14 @@ public class TimeBasedTranslator {
                     PrismConfig.Distribution.StateProb sp = decideSickDist.probabilities.get(i);
                     double normalizedProb;
                     if (i == decideSickDist.probabilities.size() - 1) {
-                        // Last probability: ensure exact sum to 1.0
+                        // Last probability: ensure exact sum to 1.0 by taking complement
                         normalizedProb = 1.0 - accumulatedProb;
                     } else {
                         normalizedProb = sp.probability / totalProb;
                         accumulatedProb += normalizedProb;
                     }
-                    sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=2)",
+                    // Use %.16f for maximum precision to avoid rounding issues
+                    sb.append(String.format("    %.16f : (response_state'=%d) & (response_type'=2)",
                         normalizedProb, sp.state));
                     if (i < decideSickDist.probabilities.size() - 1) {
                         sb.append(" +\n");
