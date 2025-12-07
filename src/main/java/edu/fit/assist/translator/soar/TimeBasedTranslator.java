@@ -386,10 +386,11 @@ public class TimeBasedTranslator {
                 }
                 
                 Object value = entry.getValue();
-                if (value instanceof Double || value instanceof Float) {
-                    sb.append(String.format("const double %s = %.2f;\n", name, ((Number)value).doubleValue()));
-                } else if (value instanceof Integer || value instanceof Long) {
+                // Check if it's an integer type first, before checking floating point
+                if (value instanceof Integer || value instanceof Long) {
                     sb.append(String.format("const int %s = %d;\n", name, ((Number)value).intValue()));
+                } else if (value instanceof Double || value instanceof Float) {
+                    sb.append(String.format("const double %s = %.2f;\n", name, ((Number)value).doubleValue()));
                 } else {
                     sb.append(String.format("const %s = %s;\n", name, value));
                 }
@@ -627,11 +628,18 @@ public class TimeBasedTranslator {
             // Use sickness level 0 (healthy) distribution as example
             PrismConfig.Distribution selectDist = config.getResponseSelect().get("sickness0");
             if (selectDist != null && selectDist.probabilities != null) {
+                // Normalize probabilities to sum to 1.0
+                double totalProb = 0.0;
+                for (PrismConfig.Distribution.StateProb sp : selectDist.probabilities) {
+                    totalProb += sp.probability;
+                }
+                
                 sb.append("  [sync] action=3 & response_state=0 & sick=0 ->\n");
                 for (int i = 0; i < selectDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = selectDist.probabilities.get(i);
+                    double normalizedProb = sp.probability / totalProb;
                     sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=1)",
-                        sp.probability, sp.state));
+                        normalizedProb, sp.state));
                     if (i < selectDist.probabilities.size() - 1) {
                         sb.append(" +\n");
                     } else {
@@ -644,11 +652,18 @@ public class TimeBasedTranslator {
             // Sick agent has different distribution
             PrismConfig.Distribution selectSickDist = config.getResponseSelect().get("sickness1");
             if (selectSickDist != null && selectSickDist.probabilities != null) {
+                // Normalize probabilities to sum to 1.0
+                double totalProb = 0.0;
+                for (PrismConfig.Distribution.StateProb sp : selectSickDist.probabilities) {
+                    totalProb += sp.probability;
+                }
+                
                 sb.append("  [sync] action=3 & response_state=0 & sick=1 ->\n");
                 for (int i = 0; i < selectSickDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = selectSickDist.probabilities.get(i);
+                    double normalizedProb = sp.probability / totalProb;
                     sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=1)",
-                        sp.probability, sp.state));
+                        normalizedProb, sp.state));
                     if (i < selectSickDist.probabilities.size() - 1) {
                         sb.append(" +\n");
                     } else {
@@ -667,11 +682,18 @@ public class TimeBasedTranslator {
             // Healthy agent decision response
             PrismConfig.Distribution decideDist = config.getResponseDecide().get("sickness0");
             if (decideDist != null && decideDist.probabilities != null) {
+                // Normalize probabilities to sum to 1.0
+                double totalProb = 0.0;
+                for (PrismConfig.Distribution.StateProb sp : decideDist.probabilities) {
+                    totalProb += sp.probability;
+                }
+                
                 sb.append("  [sync] action=0 & response_state=0 & sick=0 ->\n");
                 for (int i = 0; i < decideDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = decideDist.probabilities.get(i);
+                    double normalizedProb = sp.probability / totalProb;
                     sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=2)",
-                        sp.probability, sp.state));
+                        normalizedProb, sp.state));
                     if (i < decideDist.probabilities.size() - 1) {
                         sb.append(" +\n");
                     } else {
@@ -684,11 +706,18 @@ public class TimeBasedTranslator {
             // Sick agent decision response
             PrismConfig.Distribution decideSickDist = config.getResponseDecide().get("sickness1");
             if (decideSickDist != null && decideSickDist.probabilities != null) {
+                // Normalize probabilities to sum to 1.0
+                double totalProb = 0.0;
+                for (PrismConfig.Distribution.StateProb sp : decideSickDist.probabilities) {
+                    totalProb += sp.probability;
+                }
+                
                 sb.append("  [sync] action=0 & response_state=0 & sick=1 ->\n");
                 for (int i = 0; i < decideSickDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = decideSickDist.probabilities.get(i);
+                    double normalizedProb = sp.probability / totalProb;
                     sb.append(String.format("    %.10f : (response_state'=%d) & (response_type'=2)",
-                        sp.probability, sp.state));
+                        normalizedProb, sp.state));
                     if (i < decideSickDist.probabilities.size() - 1) {
                         sb.append(" +\n");
                     } else {
