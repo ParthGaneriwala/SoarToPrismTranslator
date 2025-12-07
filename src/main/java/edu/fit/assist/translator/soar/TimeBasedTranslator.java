@@ -933,15 +933,11 @@ public class TimeBasedTranslator {
         }
         sb.append("\n");
         
-        sb.append("  // ---- reset checked flag at window starts for repeated sampling ----\n");
-        // Reset sickness_checked to 0 at the start of each window (except first)
-        for (int i = 1; i < timeWindows.size(); i++) {
-            int window = timeWindows.get(i);
-            // Reset happens 1 time step before the window
-            if (window > 0) {
-                sb.append(String.format("  [sync] time_counter = %4d & %s=mission_monitor -> (%s' = 0) & (%s' = %s) & (%s' = %s) & (%s' = %s);\n",
-                    window - 1, nameVar, sicknessCheckedVar, sickVar, sickVar, tsVar, tsVar, nameVar, nameVar));
-            }
+        sb.append("  // ---- switch to sickness monitor at window starts ----\n");
+        // Switch from mission_monitor to sickness_monitor at each window start
+        for (int window : timeWindows) {
+            sb.append(String.format("  [sync] time_counter = %4d & %s=mission_monitor -> (%s' = sickness_monitor) & (%s' = %s) & (%s' = %s) & (%s' = %s);\n",
+                window, nameVar, nameVar, sickVar, sickVar, tsVar, tsVar, sicknessCheckedVar, sicknessCheckedVar));
         }
         
         sb.append("\n  // ---- commit at window end ----\n");
