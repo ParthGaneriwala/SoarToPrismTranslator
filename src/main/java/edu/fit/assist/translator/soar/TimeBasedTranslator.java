@@ -445,20 +445,28 @@ public class TimeBasedTranslator {
             }
         }
         
-        // Infer which actions trigger select vs decide from transition names  
-        // Default assumptions based on cognitive architecture patterns:
-        // - Initial/highest action state = selecting/scanning (before any transition)
-        // - Lower action states = deciding, decided, etc.
-        selectActionTrigger = maxAction; // Selecting happens in initial state
-        decideActionTrigger = 0; // Deciding happens in state 0 (typical after SS transition)
-        
-        // Refine based on explicit transition guards
+        // Extract action triggers from transition guards
+        // Look for SS-transition (scan-and-select) and D-transition (deciding)
         List<TransitionInfo> transitions = extractTransitionRules();
+        
+        // Default: use initial action state for selecting
+        selectActionTrigger = maxAction; 
+        
         for (TransitionInfo trans : transitions) {
             String name = trans.transitionName.toLowerCase();
-            // D transition explicitly states which action it comes from
+            
+            // SS-transition: fromActions tells us which states are "selecting" states
+            // Agent is in Scan-and-Select mode BEFORE this transition
+            if ((name.startsWith("ss") || name.contains("scan")) && trans.fromActions != null && trans.fromActions.length > 0) {
+                // Use the first (typically highest) fromAction as the primary select trigger
+                // In Soar: propose*SS-transition has ^action { << 3 2 >> } meaning select happens when action=3 or action=2
+                selectActionTrigger = trans.fromActions[0];  // Typically 3 (initial state)
+            }
+            
+            // D-transition: toAction tells us the state AFTER deciding starts
+            // But we want the state WHERE deciding happens (the fromAction)
             if ((name.startsWith("d-") || name.equals("d")) && !name.contains("dd") && trans.fromAction >= 0) {
-                decideActionTrigger = trans.fromAction;  // D transition: deciding happens FROM this state
+                decideActionTrigger = trans.fromAction;  // D transition: deciding happens when action=0
             }
         }
         
