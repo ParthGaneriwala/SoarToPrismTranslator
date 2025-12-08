@@ -7,13 +7,13 @@ import java.util.stream.Collectors;
 /**
  * Specialized translator for time-based Soar models that generates PRISM code
  * with synchronized modules for temporal progression and probabilistic state transitions.
- * 
+ *
  * This translator is designed to handle Soar models with:
  * - Time-based progression (time counters)
  * - Window-based sampling (e.g., sickness checks at specific time windows)
  * - Probabilistic state transitions
  * - Synchronized module interactions
- * 
+ *
  * Can optionally use external configuration file for:
  * - Module definitions and mappings
  * - PDF values and constants
@@ -26,7 +26,7 @@ public class TimeBasedTranslator {
     private List<Integer> commitTimes = new ArrayList<>();
     private Map<String, Object> constantValues = new LinkedHashMap<>();
     private PrismConfig config = null;
-    
+
     // Extracted variable information from Soar
     private Map<String, VariableInfo> stateVariables = new LinkedHashMap<>();
     private Map<String, Integer> monitorConstants = new LinkedHashMap<>();
@@ -35,18 +35,18 @@ public class TimeBasedTranslator {
     private int selectActionTrigger = -1;
     private int decideActionTrigger = -1;
     private int maxResponseState = 60;
-    
+
     // Variable name references - dynamically discovered from Soar
     private String actionVarName = null;
     private String sickVarName = null;
     private String nameVarName = null;
     private String tsVarName = null;
     private String sicknessCheckedVarName = null;
-    
+
     // Module constants (fallback if not extracted)
     private static final int MISSION_MONITOR = 0;
     private static final int SICKNESS_MONITOR = 1;
-    
+
     /**
      * Internal class to store variable metadata extracted from Soar
      */
@@ -56,7 +56,7 @@ public class TimeBasedTranslator {
         int maxValue;
         int initValue;
         String type; // "int" or "boolean" inferred from range
-        
+
         VariableInfo(String name, int minValue, int maxValue, int initValue) {
             // Normalize variable name for PRISM compatibility (replace dashes with underscores)
             this.name = normalizePrismVariableName(name);
@@ -65,12 +65,12 @@ public class TimeBasedTranslator {
             this.initValue = initValue;
             this.type = (maxValue == 1) ? "boolean" : "int";
         }
-        
+
         String getPrismDeclaration() {
             return String.format("%s : [%d..%d] init %d", name, minValue, maxValue, initValue);
         }
     }
-    
+
     /**
      * Normalize variable names for PRISM compatibility
      * PRISM syntax does not allow dashes in variable names, only underscores
@@ -79,12 +79,12 @@ public class TimeBasedTranslator {
         if (name == null) return null;
         return name.replace('-', '_');
     }
-    
+
     public TimeBasedTranslator(SoarRules rules) {
         this.rules = rules;
         extractConfiguration();
     }
-    
+
     /**
      * Constructor with external configuration file
      */
@@ -103,14 +103,14 @@ public class TimeBasedTranslator {
         }
         extractConfiguration();
     }
-    
+
     /**
      * Extract configuration from initialize and other rules
      * Always extract from Soar rules first, then supplement with config if available
      */
     private void extractConfiguration() {
         Integer timeInterval = null;
-        
+
         // ALWAYS extract from Soar rules first - this is the primary source
         for (Rule rule : rules.rules) {
             if (rule.ruleName.equals("apply*initialize")) {
@@ -123,13 +123,13 @@ public class TimeBasedTranslator {
                         System.err.println("Could not parse total-time: " + totalTimeStr);
                     }
                 }
-                
+
                 // Store all initialization values as constants from Soar
                 for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
                     constantValues.put(entry.getKey(), entry.getValue());
                 }
             }
-            
+
             // Look for time-interval in elaborate rules
             if (rule.ruleName.contains("elaborate") && rule.ruleName.contains("time-interval")) {
                 // Check valueMap for ti or time-interval
@@ -145,7 +145,7 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // After extracting from Soar, supplement with config if available
         // Config provides probability distributions and other data NOT in Soar
         if (config != null) {
@@ -159,32 +159,32 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // If time-interval not found in config or rules, try to infer from rule guards
         // by finding time-counter comparisons
         if (timeInterval == null) {
             timeInterval = inferTimeIntervalFromRules();
         }
-        
+
         // Generate time windows based on interval
         if (timeInterval != null && timeInterval > 0) {
             generateTimeWindows(timeInterval);
         } else {
             throw new IllegalStateException("Cannot infer time interval from Soar rules. " +
-                "No time-based guards or operations found. " +
-                "Please ensure your Soar file contains time-counter comparisons or provide a configuration file.");
+                    "No time-based guards or operations found. " +
+                    "Please ensure your Soar file contains time-counter comparisons or provide a configuration file.");
         }
-        
+
         // Extract state variables and their metadata from Soar
         extractStateVariables();
-        
+
         // Extract action range from transitions
         extractActionRange();
-        
+
         // Extract action triggers for response module
         extractActionTriggers();
     }
-    
+
     /**
      * Extract all state variables from apply*initialize rule
      * Builds metadata including name, range, and initial value
@@ -196,28 +196,28 @@ public class TimeBasedTranslator {
                 for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
                     String varName = entry.getKey();
                     String varValue = entry.getValue();
-                    
+
                     // Skip special variables
                     if (varName.equals("total-time") || varName.equals("time-counter")) {
                         continue;
                     }
-                    
+
                     try {
                         int initValue = parseInitValue(varValue);
-                        
+
                         // Infer range based on variable name and init value
                         int minValue = 0;
                         int maxValue = inferMaxValue(varName, initValue);
-                        
+
                         // Store variable info with normalized name as key
                         String normalizedName = normalizePrismVariableName(varName);
                         stateVariables.put(normalizedName, new VariableInfo(varName, minValue, maxValue, initValue));
-                        
+
                         // Special handling for monitor constants
                         if (varName.equals("name")) {
                             extractMonitorConstants(rule);
                         }
-                        
+
                     } catch (NumberFormatException e) {
                         // Not a numeric variable, skip
                         System.out.println("DEBUG: Skipping non-numeric variable: " + varName + " = " + varValue);
@@ -226,11 +226,11 @@ public class TimeBasedTranslator {
                 break;
             }
         }
-        
+
         // After extraction, discover variable name mappings
         discoverVariableNames();
     }
-    
+
     /**
      * Discover which extracted variables correspond to common Soar patterns
      * Maps generic concepts (action, sickness, etc.) to actual variable names used in this Soar model
@@ -254,7 +254,7 @@ public class TimeBasedTranslator {
                 sicknessCheckedVarName = varName;
             }
         }
-        
+
         // Fallbacks - if not found by name pattern, use first variables of appropriate type
         if (actionVarName == null) {
             // Look for integer variable used in transition guards
@@ -266,7 +266,7 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         System.out.println("INFO: Discovered variable mappings:");
         System.out.println("  action -> " + actionVarName);
         System.out.println("  sick -> " + sickVarName);
@@ -274,67 +274,67 @@ public class TimeBasedTranslator {
         System.out.println("  ts -> " + tsVarName);
         System.out.println("  sickness_checked -> " + sicknessCheckedVarName);
     }
-    
+
     /**
      * Get the PRISM variable name for action state
      */
     private String getActionVarName() {
         return actionVarName != null ? actionVarName : "action";
     }
-    
+
     /**
      * Get the PRISM variable name for sickness state
      */
     private String getSickVarName() {
         return sickVarName != null ? sickVarName : "sick";
     }
-    
+
     /**
      * Get the PRISM variable name for monitor name
      */
     private String getNameVarName() {
         return nameVarName != null ? nameVarName : "name";
     }
-    
+
     /**
      * Get the PRISM variable name for temporary sickness state
      */
     private String getTsVarName() {
         return tsVarName != null ? tsVarName : "ts";
     }
-    
+
     /**
      * Get the PRISM variable name for sickness checked flag
      */
     private String getSicknessCheckedVarName() {
         return sicknessCheckedVarName != null ? sicknessCheckedVarName : "sickness_checked";
     }
-    
+
     /**
      * Parse initialization value from Soar (handles "yes", "no", numbers, etc.)
      */
     private int parseInitValue(String value) throws NumberFormatException {
         if (value == null) throw new NumberFormatException("null value");
-        
+
         // Handle boolean-like values
         if (value.equals("yes") || value.equals("true")) return 1;
         if (value.equals("no") || value.equals("false")) return 0;
-        
+
         // Handle monitor names
         if (value.equals("mission-monitor")) return 0;
         if (value.equals("sickness-monitor")) return 1;
-        
+
         // Parse as number
         return Integer.parseInt(value.trim());
     }
-    
+
     /**
      * Infer maximum value for a variable based on its name and init value
      */
     private int inferMaxValue(String varName, int initValue) {
         // Check if variable appears in rules to find max value
         int maxFound = initValue;
-        
+
         for (Rule rule : rules.rules) {
             // Check guards and valueMap for this variable
             for (String guard : rule.guards) {
@@ -351,7 +351,7 @@ public class TimeBasedTranslator {
                     }
                 }
             }
-            
+
             // Check valueMap
             if (rule.valueMap.containsKey(varName)) {
                 try {
@@ -362,13 +362,13 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // Default to 1 for boolean-like variables
         if (maxFound == 0 || maxFound == 1) return 1;
-        
+
         return maxFound;
     }
-    
+
     /**
      * Extract monitor constant values from init rule
      */
@@ -379,18 +379,18 @@ public class TimeBasedTranslator {
                 // Extract from guards or valueMap
             }
         }
-        
+
         // Use standard values if not found
         monitorConstants.put("mission_monitor", 0);
         monitorConstants.put("sickness_monitor", 1);
     }
-    
+
     /**
      * Extract action range from transition rules
      */
     private void extractActionRange() {
         List<TransitionInfo> transitions = extractTransitionRules();
-        
+
         for (TransitionInfo trans : transitions) {
             if (trans.toAction >= 0) {
                 minAction = Math.min(minAction, trans.toAction);
@@ -407,21 +407,21 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // Also check init value if action variable exists
         if (stateVariables.containsKey("action")) {
             int initAction = stateVariables.get("action").initValue;
             minAction = Math.min(minAction, initAction);
             maxAction = Math.max(maxAction, initAction);
         }
-        
+
         // If no transitions found, fall back to extracted state variable
         if (minAction == Integer.MAX_VALUE || maxAction == Integer.MIN_VALUE) {
             minAction = 0;
             maxAction = stateVariables.containsKey("action") ? stateVariables.get("action").maxValue : 3;
         }
     }
-    
+
     /**
      * Extract action triggers for response module
      * Determines which actions trigger select vs decide responses
@@ -444,17 +444,17 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // Extract action triggers from transition guards
         // Look for SS-transition (scan-and-select) and D-transition (deciding)
         List<TransitionInfo> transitions = extractTransitionRules();
-        
+
         // Default: use initial action state for selecting
-        selectActionTrigger = maxAction; 
-        
+        selectActionTrigger = maxAction;
+
         for (TransitionInfo trans : transitions) {
             String name = trans.transitionName.toLowerCase();
-            
+
             // SS-transition: fromActions tells us which states are "selecting" states
             // Agent is in Scan-and-Select mode BEFORE this transition
             if ((name.startsWith("ss") || name.contains("scan")) && trans.fromActions != null && trans.fromActions.size() > 0) {
@@ -462,23 +462,23 @@ public class TimeBasedTranslator {
                 // In Soar: propose*SS-transition has ^action { << 3 2 >> } meaning select happens when action=3 or action=2
                 selectActionTrigger = trans.fromActions.get(0);  // Typically 3 (initial state)
             }
-            
+
             // D-transition: toAction tells us the state AFTER deciding starts
             // But we want the state WHERE deciding happens (the fromAction)
             if ((name.startsWith("d-") || name.equals("d")) && !name.contains("dd") && trans.fromAction >= 0) {
                 decideActionTrigger = trans.fromAction;  // D transition: deciding happens when action=0
             }
         }
-        
+
         System.out.println("DEBUG: Extracted action triggers - select=" + selectActionTrigger + ", decide=" + decideActionTrigger);
     }
-    
+
     /**
      * Infer time interval by analyzing guards and time-counter operations in rules
      */
     private Integer inferTimeIntervalFromRules() {
         Set<Integer> timeValues = new TreeSet<>();
-        
+
         // Scan all rules for time-counter related operations
         for (Rule rule : rules.rules) {
             // Check guards for time-counter comparisons
@@ -498,7 +498,7 @@ public class TimeBasedTranslator {
                     }
                 }
             }
-            
+
             // Check valueMap for time-counter updates
             for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
                 if (entry.getKey().contains("time-counter") || entry.getKey().contains("time_counter")) {
@@ -521,12 +521,12 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // If we found time values, calculate the interval
         if (!timeValues.isEmpty()) {
             List<Integer> sortedValues = new ArrayList<>(timeValues);
             Collections.sort(sortedValues);
-            
+
             // Calculate GCD of differences to find the interval
             if (sortedValues.size() >= 2) {
                 List<Integer> differences = new ArrayList<>();
@@ -536,7 +536,7 @@ public class TimeBasedTranslator {
                         differences.add(diff);
                     }
                 }
-                
+
                 if (!differences.isEmpty()) {
                     // Find GCD of all differences
                     int gcd = differences.get(0);
@@ -547,10 +547,10 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         return null;
     }
-    
+
     /**
      * Calculate GCD of two numbers
      */
@@ -558,14 +558,14 @@ public class TimeBasedTranslator {
         if (b == 0) return a;
         return gcd(b, a % b);
     }
-    
+
     /**
      * Generate time windows and commit times based on interval
      */
     private void generateTimeWindows(int interval) {
         List<Integer> windows = new ArrayList<>();
         List<Integer> commits = new ArrayList<>();
-        
+
         // Generate windows from 0 to totalTime with given interval
         for (int t = 0; t <= totalTime; t += interval) {
             windows.add(t);
@@ -574,64 +574,64 @@ public class TimeBasedTranslator {
                 commits.add(t + interval - 1);
             }
         }
-        
+
         timeWindows = windows;
         commitTimes = commits;
     }
-    
+
     /**
      * Main translation method that generates PRISM code
      */
     public String translateToTimeBased() {
         StringBuilder output = new StringBuilder();
-        
+
         output.append("dtmc\n");
         output.append("//PRISM model generated from Soar cognitive model\n");
         output.append(String.format("//Total time: %d\n\n", totalTime));
-        
+
         // Generate constants
         output.append(generateConstants());
         output.append("\n");
-        
+
         // Generate time module
         output.append(generateTimeModule());
         output.append("\n");
-        
+
         // Extract transitions first (needed by action_state module)
         List<TransitionInfo> transitions = extractTransitionRules();
-        
+
         // Generate action state module (must be before transition modules)
         output.append(generateActionStateModule(transitions));
         output.append("\n");
-        
+
         // Generate sickness module
         output.append(generateSicknessModule());
         output.append("\n");
-        
+
         // Generate action transition modules
         output.append(generateActionModules(transitions));
         output.append("\n");
-        
+
         // Generate response time module (if distributions available)
         String responseModule = generateResponseTimeModule();
         if (!responseModule.isEmpty()) {
             output.append(responseModule);
             output.append("\n");
         }
-        
+
         // Generate decision error module (if distributions available)
         String errorModule = generateDecisionErrorModule();
         if (!errorModule.isEmpty()) {
             output.append(errorModule);
             output.append("\n");
         }
-        
+
         // Generate rewards
         output.append(generateRewards());
-        
+
         return output.toString();
     }
-    
+
     /**
      * Generate constant definitions
      * Prioritizes constants extracted from Soar rules, supplements with config
@@ -639,12 +639,12 @@ public class TimeBasedTranslator {
     private String generateConstants() {
         StringBuilder sb = new StringBuilder();
         sb.append(String.format("const int TOTAL_TIME = %d;\n", totalTime));
-        
+
         // Extract module name constants from Soar rules
         // Look for name values in initialize rule
         boolean foundMissionMonitor = false;
         boolean foundSicknessMonitor = false;
-        
+
         for (Rule rule : rules.rules) {
             if (rule.ruleName.equals("apply*initialize")) {
                 String nameValue = rule.valueMap.get("name");
@@ -664,7 +664,7 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // If not found in Soar rules, use defaults
         if (!foundMissionMonitor) {
             sb.append(String.format("const int mission_monitor  = %d;\n", MISSION_MONITOR));
@@ -672,7 +672,7 @@ public class TimeBasedTranslator {
         if (!foundSicknessMonitor) {
             sb.append(String.format("const int sickness_monitor = %d;\n", SICKNESS_MONITOR));
         }
-        
+
         // Add probability constants from Soar rules first
         double pdf1 = findProbabilityValue("pdf1", -1.0);
         if (pdf1 < 0) {
@@ -683,7 +683,7 @@ public class TimeBasedTranslator {
                 pdf1 = 1.0 - sickThres;
             }
         }
-        
+
         // If still not found in Soar, check config constants
         if (pdf1 < 0 && config != null && config.getConstants().containsKey("pdf1")) {
             Object pdf1Obj = config.getConstants().get("pdf1");
@@ -691,7 +691,7 @@ public class TimeBasedTranslator {
                 pdf1 = ((Number)pdf1Obj).doubleValue();
             }
         }
-        
+
         // If still not found, try to extract from sickness probability table
         // pdf1 represents P(healthy stays healthy) = P(sick=0 | sick'=0, time=0)
         if (pdf1 < 0 && config != null && !config.getSicknessProbabilityTable().isEmpty()) {
@@ -710,27 +710,27 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // Fail fast if pdf1 not found
         if (pdf1 < 0) {
             throw new IllegalStateException("Cannot find pdf1 or sick_thres value in Soar rules or configuration. " +
-                "Please ensure your Soar file contains sick_thres initialization, or provide a configuration file with either:\n" +
-                "  - 'pdf1' in the constants section, OR\n" +
-                "  - sicknessProbabilityTable with entries like '0,0,0' (time,currentLevel,nextLevel)");
+                    "Please ensure your Soar file contains sick_thres initialization, or provide a configuration file with either:\n" +
+                    "  - 'pdf1' in the constants section, OR\n" +
+                    "  - sicknessProbabilityTable with entries like '0,0,0' (time,currentLevel,nextLevel)");
         }
-        
+
         sb.append(String.format("const double pdf1 = %.2f;\n", pdf1));
-        
+
         // Add any additional constants from config that aren't already defined
         if (config != null && !config.getConstants().isEmpty()) {
             for (Map.Entry<String, Object> entry : config.getConstants().entrySet()) {
                 String name = entry.getKey();
                 // Skip if already defined (mission_monitor, sickness_monitor, pdf1, TOTAL_TIME)
-                if (name.equals("mission_monitor") || name.equals("sickness_monitor") || 
-                    name.equals("pdf1") || name.equals("TOTAL_TIME")) {
+                if (name.equals("mission_monitor") || name.equals("sickness_monitor") ||
+                        name.equals("pdf1") || name.equals("TOTAL_TIME")) {
                     continue;
                 }
-                
+
                 Object value = entry.getValue();
                 // Check if it's an integer type first, before checking floating point
                 if (value instanceof Integer || value instanceof Long) {
@@ -742,11 +742,11 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         sb.append("\n");
         return sb.toString();
     }
-    
+
     /**
      * Generate the time module that increments time counter
      */
@@ -759,7 +759,7 @@ public class TimeBasedTranslator {
         sb.append("endmodule\n");
         return sb.toString();
     }
-    
+
     /**
      * Generate action state module
      * Tracks the current action state (Scan-and-Select, Deciding, Decided)
@@ -767,10 +767,10 @@ public class TimeBasedTranslator {
     private String generateActionStateModule(List<TransitionInfo> transitions) {
         StringBuilder sb = new StringBuilder();
         sb.append("module action_state\n");
-        
+
         // Extract initial action value from multiple sources
         Integer initAction = null;
-        
+
         // 1. Try to extract from Soar apply*initialize rule
         if (actionVarName != null && stateVariables.containsKey(actionVarName)) {
             initAction = stateVariables.get(actionVarName).initValue;
@@ -791,7 +791,7 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // 2. Try to extract from config file constants
         if (initAction == null && config != null) {
             Object actionObj = config.getConstants().get("initialAction");
@@ -804,7 +804,7 @@ public class TimeBasedTranslator {
                 }
             }
         }
-        
+
         // 3. Infer from transition rules - find highest action state and add 1
         if (initAction == null && !transitions.isEmpty()) {
             int maxAction = -1;
@@ -828,20 +828,20 @@ public class TimeBasedTranslator {
                 System.out.println("INFO: Inferred initial action=" + initAction + " from transition rules (max action + 1)");
             }
         }
-        
+
         // Fail fast if action not found
         if (initAction == null) {
             throw new IllegalStateException("Cannot find initial action value. Tried:\n" +
-                "  1. Soar apply*initialize rule (valueMap['action'])\n" +
-                "  2. Config file constants section (initialAction)\n" +
-                "  3. Inference from transition rules (max action + 1)\n" +
-                "Please provide initial action in one of these locations.");
+                    "  1. Soar apply*initialize rule (valueMap['action'])\n" +
+                    "  2. Config file constants section (initialAction)\n" +
+                    "  3. Inference from transition rules (max action + 1)\n" +
+                    "Please provide initial action in one of these locations.");
         }
-        
+
         // Use extracted action range instead of hardcoded [0..3]
         int actionMin = (minAction != Integer.MAX_VALUE) ? minAction : 0;
         int actionMax = (maxAction != Integer.MIN_VALUE) ? maxAction : 3;
-        
+
         // Ensure action range includes the init value
         if (initAction > actionMax) {
             actionMax = initAction;
@@ -849,33 +849,33 @@ public class TimeBasedTranslator {
         if (initAction < actionMin) {
             actionMin = initAction;
         }
-        
+
         // Generate action variable declaration with extracted/inferred range
         String actionVar = getActionVarName();
         sb.append(String.format("  %s : [%d..%d] init %d;\n", actionVar, actionMin, actionMax, initAction));
         sb.append("\n");
-        
+
         // Generate transitions for each action module - action_state listens for signals
         // Use mutually exclusive guards to avoid overlaps
         for (int i = 0; i < transitions.size(); i++) {
             TransitionInfo info = transitions.get(i);
             String moduleName = info.transitionName.toLowerCase() + "_transition";
-            
+
             // Build guard that excludes other transitions
             StringBuilder guard = new StringBuilder();
             guard.append(String.format("%s_ing=1", moduleName));
-            
+
             for (int j = 0; j < transitions.size(); j++) {
                 if (i != j) {
                     String otherModule = transitions.get(j).transitionName.toLowerCase() + "_transition";
                     guard.append(String.format(" & !(%s_ing=1)", otherModule));
                 }
             }
-            
+
             sb.append(String.format("  [sync] %s -> (%s' = %d);\n", guard.toString(), actionVar, info.toAction));
         }
         sb.append("\n");
-        
+
         // Else clause - keep action unchanged when no transition is active
         StringBuilder elseGuard = new StringBuilder();
         for (int i = 0; i < transitions.size(); i++) {
@@ -883,13 +883,13 @@ public class TimeBasedTranslator {
             String moduleName = transitions.get(i).transitionName.toLowerCase() + "_transition";
             elseGuard.append(String.format("!(%s_ing=1)", moduleName));
         }
-        
+
         sb.append(String.format("  [sync] %s -> (%s' = %s);\n", elseGuard.toString(), actionVar, actionVar));
-        
+
         sb.append("endmodule\n");
         return sb.toString();
     }
-    
+
     /**
      * Generate the sickness monitoring module
      */
@@ -899,14 +899,14 @@ public class TimeBasedTranslator {
     private String generateSicknessModule() {
         StringBuilder sb = new StringBuilder();
         sb.append("module sickness\n");
-        
+
         // State variables - use extracted info instead of hardcoded
         // Get variable names from extracted metadata
         String nameVar = getNameVarName();
         String sickVar = getSickVarName();
         String tsVar = getTsVarName();
         String sicknessCheckedVar = getSicknessCheckedVarName();
-        
+
         // Generate variable declarations from extracted state variables
         String[] varReferences = {nameVar, sickVar, tsVar, sicknessCheckedVar};
         for (String varRef : varReferences) {
@@ -915,7 +915,7 @@ public class TimeBasedTranslator {
                 VariableInfo var = stateVariables.get(varRef);
                 // var.name is already PRISM-compatible (normalized in constructor)
                 sb.append(String.format("  %-16s : [%d..%d] init ", var.name, var.minValue, var.maxValue));
-                
+
                 // Handle init value - special case for 'name' which should init to mission_monitor
                 if (var.name.equals(nameVar)) {
                     sb.append("mission_monitor;\n");
@@ -933,7 +933,7 @@ public class TimeBasedTranslator {
             }
         }
         sb.append("\n");
-        
+
         sb.append("\n  // ---- sample at window start (automatically in sickness monitor mode) ----\n");
         // Generate sampling transitions at window starts - use dynamic variable names
         // Note: We assume the model is always in sickness_monitor mode at window starts due to initialization
@@ -941,16 +941,16 @@ public class TimeBasedTranslator {
         for (int window : timeWindows) {
             // Sample when not sick (probabilistic)
             sb.append(String.format("  [sync] time_counter = %4d & %s=0 & %s=0 ->\n",
-                window, sicknessCheckedVar, sickVar));
+                    window, sicknessCheckedVar, sickVar));
             sb.append(String.format("        pdf1     : (%s'=0) & (%s'=1)\n", tsVar, sicknessCheckedVar));
             sb.append(String.format("      + (1-pdf1) : (%s'=1) & (%s'=1);\n", tsVar, sicknessCheckedVar));
-            
+
             // Sample when sick (stays sick)
             sb.append(String.format("  [sync] time_counter = %4d & %s=0 & %s=1 ->\n",
-                window, sicknessCheckedVar, sickVar));
+                    window, sicknessCheckedVar, sickVar));
             sb.append(String.format("        1 : (%s'=1) & (%s'=1);\n\n", tsVar, sicknessCheckedVar));
         }
-        
+
         // Reset sickness_checked at one step before each window (to enable re-sampling)
         // Integrated with commit transitions to avoid overlap
         sb.append("  // ---- commit at window end (with sickness_checked reset) ----\n");
@@ -961,34 +961,34 @@ public class TimeBasedTranslator {
         for (int i = 0; i < commitTimes.size(); i++) {
             int commitTime = commitTimes.get(i);
             // When sickness_checked=0, just commit
-            sb.append(String.format("  [sync] time_counter = %4d & %s=0 -> (%s' = %s);\n", 
-                commitTime, sicknessCheckedVar, sickVar, tsVar));
+            sb.append(String.format("  [sync] time_counter = %4d & %s=0 -> (%s' = %s);\n",
+                    commitTime, sicknessCheckedVar, sickVar, tsVar));
             // When sickness_checked=1, commit AND reset for next sampling
-            sb.append(String.format("  [sync] time_counter = %4d & %s=1 -> (%s' = %s) & (%s' = 0);\n", 
-                commitTime, sicknessCheckedVar, sickVar, tsVar, sicknessCheckedVar));
+            sb.append(String.format("  [sync] time_counter = %4d & %s=1 -> (%s' = %s) & (%s' = 0);\n",
+                    commitTime, sicknessCheckedVar, sickVar, tsVar, sicknessCheckedVar));
         }
         sb.append("\n");
-        
+
         // Generate default/else transition - use dynamic variable names
         // This ensures the module always has a transition enabled (prevents deadlocks)
         // Must be mutually exclusive with all other transitions above
         sb.append("  // ---- default transition (keeps state unchanged) ----\n");
         sb.append("  [sync] ");
-        
+
         // Build guard that excludes all specific conditions above
         List<String> excludeConditions = new ArrayList<>();
-        
+
         // Exclude commit times (both sickness_checked=0 and sickness_checked=1 cases)
         for (int commitTime : commitTimes) {
             excludeConditions.add(String.format("time_counter = %d", commitTime));
         }
-        
+
         // Exclude sampling windows (when sickness_checked=0, regardless of sick state)
         for (int window : timeWindows) {
-            excludeConditions.add(String.format("(time_counter = %d & %s=0)", 
-                window, sicknessCheckedVar));
+            excludeConditions.add(String.format("(time_counter = %d & %s=0)",
+                    window, sicknessCheckedVar));
         }
-        
+
         // Build the exclusion guard
         for (int i = 0; i < excludeConditions.size(); i++) {
             if (i > 0) sb.append(" & ");
@@ -996,43 +996,43 @@ public class TimeBasedTranslator {
             sb.append(excludeConditions.get(i));
             sb.append(")");
         }
-        
+
         sb.append(" ->\n");
-        sb.append(String.format("    (%s' = %s) & (%s' = %s) & (%s' = %s) & (%s' = %s);\n", 
-            sickVar, sickVar, tsVar, tsVar, sicknessCheckedVar, sicknessCheckedVar, nameVar, nameVar));
-        
+        sb.append(String.format("    (%s' = %s) & (%s' = %s) & (%s' = %s) & (%s' = %s);\n",
+                sickVar, sickVar, tsVar, tsVar, sicknessCheckedVar, sicknessCheckedVar, nameVar, nameVar));
+
         sb.append("endmodule\n");
         return sb.toString();
     }
-    
+
     /**
      * Generate response time module using loaded distributions
      * Integrates responseSelect and responseDecide distributions from config
      * Extracts max response state and action triggers dynamically
      */
     private String generateResponseTimeModule() {
-        if (config == null || 
-            (config.getResponseSelect().isEmpty() && config.getResponseDecide().isEmpty())) {
+        if (config == null ||
+                (config.getResponseSelect().isEmpty() && config.getResponseDecide().isEmpty())) {
             return ""; // No response distributions available
         }
-        
+
         // Get dynamic variable names
         String actionVar = getActionVarName();
         String sickVar = getSickVarName();
-        
+
         // Use class variables for action triggers and max response state (already extracted in extractActionTriggers)
         StringBuilder sb = new StringBuilder();
         sb.append("\n// ---- Response Time Modeling ----\n");
         sb.append("module response_time\n");
-        sb.append(String.format("  response_state : [0..%d] init 0;  // 0 = idle, 1-%d = responding\n", 
-            maxResponseState, maxResponseState));
+        sb.append(String.format("  response_state : [0..%d] init 0;  // 0 = idle, 1-%d = responding\n",
+                maxResponseState, maxResponseState));
         sb.append("  response_type  : [0..2] init 0;   // 0 = none, 1 = select, 2 = decide\n\n");
-        
+
         // Generate select response transitions
         if (!config.getResponseSelect().isEmpty()) {
             sb.append("  // ---- Scan-and-Select Response Distribution ----\n");
             sb.append(String.format("  // Triggered when %s=%d (selecting state)\n", actionVar, selectActionTrigger));
-            
+
             // Use sickness level 0 (healthy) distribution as example
             PrismConfig.Distribution selectDist = config.getResponseSelect().get("sickness0");
             if (selectDist != null && selectDist.probabilities != null) {
@@ -1041,9 +1041,9 @@ public class TimeBasedTranslator {
                 for (PrismConfig.Distribution.StateProb sp : selectDist.probabilities) {
                     totalProb += sp.probability;
                 }
-                
-                sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=0 ->\n", 
-                    actionVar, selectActionTrigger, sickVar));
+
+                sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=0 ->\n",
+                        actionVar, selectActionTrigger, sickVar));
                 double accumulatedProb = 0.0;
                 for (int i = 0; i < selectDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = selectDist.probabilities.get(i);
@@ -1057,7 +1057,7 @@ public class TimeBasedTranslator {
                     }
                     // Use %.16f for maximum precision to avoid rounding issues
                     sb.append(String.format("    %.16f : (response_state'=%d) & (response_type'=1)",
-                        normalizedProb, sp.state));
+                            normalizedProb, sp.state));
                     if (i < selectDist.probabilities.size() - 1) {
                         sb.append(" +\n");
                     } else {
@@ -1066,7 +1066,7 @@ public class TimeBasedTranslator {
                 }
                 sb.append("\n");
             }
-            
+
             // Sick agent has different distribution
             PrismConfig.Distribution selectSickDist = config.getResponseSelect().get("sickness1");
             if (selectSickDist != null && selectSickDist.probabilities != null) {
@@ -1075,9 +1075,9 @@ public class TimeBasedTranslator {
                 for (PrismConfig.Distribution.StateProb sp : selectSickDist.probabilities) {
                     totalProb += sp.probability;
                 }
-                
+
                 sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=1 ->\n",
-                    actionVar, selectActionTrigger, sickVar));
+                        actionVar, selectActionTrigger, sickVar));
                 double accumulatedProb = 0.0;
                 for (int i = 0; i < selectSickDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = selectSickDist.probabilities.get(i);
@@ -1091,7 +1091,7 @@ public class TimeBasedTranslator {
                     }
                     // Use %.16f for maximum precision to avoid rounding issues
                     sb.append(String.format("    %.16f : (response_state'=%d) & (response_type'=1)",
-                        normalizedProb, sp.state));
+                            normalizedProb, sp.state));
                     if (i < selectSickDist.probabilities.size() - 1) {
                         sb.append(" +\n");
                     } else {
@@ -1101,12 +1101,12 @@ public class TimeBasedTranslator {
                 sb.append("\n");
             }
         }
-        
+
         // Generate decide response transitions
         if (!config.getResponseDecide().isEmpty()) {
             sb.append("  // ---- Decision Response Distribution ----\n");
             sb.append("  // Triggered when action transitions to deciding state\n");
-            
+
             // Healthy agent decision response
             PrismConfig.Distribution decideDist = config.getResponseDecide().get("sickness0");
             if (decideDist != null && decideDist.probabilities != null) {
@@ -1115,9 +1115,9 @@ public class TimeBasedTranslator {
                 for (PrismConfig.Distribution.StateProb sp : decideDist.probabilities) {
                     totalProb += sp.probability;
                 }
-                
+
                 sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=0 ->\n",
-                    actionVar, decideActionTrigger, sickVar));
+                        actionVar, decideActionTrigger, sickVar));
                 double accumulatedProb = 0.0;
                 for (int i = 0; i < decideDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = decideDist.probabilities.get(i);
@@ -1131,7 +1131,7 @@ public class TimeBasedTranslator {
                     }
                     // Use %.16f for maximum precision to avoid rounding issues
                     sb.append(String.format("    %.16f : (response_state'=%d) & (response_type'=2)",
-                        normalizedProb, sp.state));
+                            normalizedProb, sp.state));
                     if (i < decideDist.probabilities.size() - 1) {
                         sb.append(" +\n");
                     } else {
@@ -1140,7 +1140,7 @@ public class TimeBasedTranslator {
                 }
                 sb.append("\n");
             }
-            
+
             // Sick agent decision response
             PrismConfig.Distribution decideSickDist = config.getResponseDecide().get("sickness1");
             if (decideSickDist != null && decideSickDist.probabilities != null) {
@@ -1149,9 +1149,9 @@ public class TimeBasedTranslator {
                 for (PrismConfig.Distribution.StateProb sp : decideSickDist.probabilities) {
                     totalProb += sp.probability;
                 }
-                
+
                 sb.append(String.format("  [sync] %s=%d & response_state=0 & %s=1 ->\n",
-                    actionVar, decideActionTrigger, sickVar));
+                        actionVar, decideActionTrigger, sickVar));
                 double accumulatedProb = 0.0;
                 for (int i = 0; i < decideSickDist.probabilities.size(); i++) {
                     PrismConfig.Distribution.StateProb sp = decideSickDist.probabilities.get(i);
@@ -1165,7 +1165,7 @@ public class TimeBasedTranslator {
                     }
                     // Use %.16f for maximum precision to avoid rounding issues
                     sb.append(String.format("    %.16f : (response_state'=%d) & (response_type'=2)",
-                        normalizedProb, sp.state));
+                            normalizedProb, sp.state));
                     if (i < decideSickDist.probabilities.size() - 1) {
                         sb.append(" +\n");
                     } else {
@@ -1175,27 +1175,27 @@ public class TimeBasedTranslator {
                 sb.append("\n");
             }
         }
-        
+
         // Response completion - response state decrements each time step
         sb.append("  // ---- Response Progress ----\n");
-        sb.append(String.format("  [sync] response_state > 0 & !(%s=%d & response_state=0) & !(%s=%d & response_state=0) -> (response_state' = response_state - 1);\n\n", 
-            actionVar, selectActionTrigger, actionVar, decideActionTrigger));
-        
+        sb.append(String.format("  [sync] response_state > 0 & !(%s=%d & response_state=0) & !(%s=%d & response_state=0) -> (response_state' = response_state - 1);\n\n",
+                actionVar, selectActionTrigger, actionVar, decideActionTrigger));
+
         // Idle state - reset response type when done
         sb.append("  // ---- Idle State ----\n");
-        sb.append(String.format("  [sync] response_state = 0 & response_type > 0 & %s != %d & %s != %d ->\n", 
-            actionVar, selectActionTrigger, actionVar, decideActionTrigger));
+        sb.append(String.format("  [sync] response_state = 0 & response_type > 0 & %s != %d & %s != %d ->\n",
+                actionVar, selectActionTrigger, actionVar, decideActionTrigger));
         sb.append("    (response_state' = 0) & (response_type' = 0);\n\n");
-        
+
         sb.append("  // ---- Default ----\n");
-        sb.append(String.format("  [sync] response_state = 0 & response_type = 0 & %s != %d & %s != %d ->\n", 
-            actionVar, decideActionTrigger, actionVar, selectActionTrigger));
+        sb.append(String.format("  [sync] response_state = 0 & response_type = 0 & %s != %d & %s != %d ->\n",
+                actionVar, decideActionTrigger, actionVar, selectActionTrigger));
         sb.append("    (response_state' = response_state) & (response_type' = response_type);\n");
-        
+
         sb.append("endmodule\n");
         return sb.toString();
     }
-    
+
     /**
      * Generate decision error tracking module using loaded error distributions
      * Models decision correctness based on sickness level
@@ -1204,51 +1204,51 @@ public class TimeBasedTranslator {
         if (config == null || config.getDecisionErrorDistributions().isEmpty()) {
             return ""; // No error distributions available
         }
-        
+
         // Get dynamic variable names
         String actionVar = getActionVarName();
         String sickVar = getSickVarName();
-        
+
         StringBuilder sb = new StringBuilder();
         sb.append("\n// ---- Decision Error Modeling ----\n");
         sb.append("module decision_errors\n");
         sb.append("  decision_correct : [0..1] init 1;  // 1 = correct, 0 = error\n");
         sb.append("  error_count      : [0..10] init 0; // Track cumulative errors\n\n");
-        
+
         // Get error distributions for different sickness levels
         PrismConfig.ErrorDistribution healthyDist = config.getDecisionErrorDistributions().get("sickness0");
         PrismConfig.ErrorDistribution sickDist = config.getDecisionErrorDistributions().get("sickness1");
-        
+
         sb.append("  // ---- Decision Correctness Sampling ----\n");
-        sb.append(String.format("  // Sample when deciding (%s=%d) and response completes\n\n", 
-            actionVar, decideActionTrigger));
-        
+        sb.append(String.format("  // Sample when deciding (%s=%d) and response completes\n\n",
+                actionVar, decideActionTrigger));
+
         if (healthyDist != null) {
             sb.append("  // Healthy agent decision correctness\n");
-            sb.append(String.format("  [sync] %s=%d & response_state=1 & %s=0 ->\n", 
-                actionVar, decideActionTrigger, sickVar));
+            sb.append(String.format("  [sync] %s=%d & response_state=1 & %s=0 ->\n",
+                    actionVar, decideActionTrigger, sickVar));
             sb.append(String.format("    %.10f : (decision_correct'=1) +\n", healthyDist.correctProbability));
             sb.append(String.format("    %.10f : (decision_correct'=0) & (error_count'=min(error_count+1,10));\n\n",
-                healthyDist.errorProbability));
+                    healthyDist.errorProbability));
         }
-        
+
         if (sickDist != null) {
             sb.append("  // Sick agent decision correctness\n");
-            sb.append(String.format("  [sync] %s=%d & response_state=1 & %s=1 ->\n", 
-                actionVar, decideActionTrigger, sickVar));
+            sb.append(String.format("  [sync] %s=%d & response_state=1 & %s=1 ->\n",
+                    actionVar, decideActionTrigger, sickVar));
             sb.append(String.format("    %.10f : (decision_correct'=1) +\n", sickDist.correctProbability));
             sb.append(String.format("    %.10f : (decision_correct'=0) & (error_count'=min(error_count+1,10));\n\n",
-                sickDist.errorProbability));
+                    sickDist.errorProbability));
         }
-        
+
         sb.append("  // ---- Default State Maintenance ----\n");
         sb.append(String.format("  [sync] !(%s=%d & response_state=1) ->\n", actionVar, decideActionTrigger));
         sb.append("    (decision_correct' = decision_correct) & (error_count' = error_count);\n");
-        
+
         sb.append("endmodule\n");
         return sb.toString();
     }
-    
+
     /**
      * Generate action modules (placeholder for extensibility)
      */
@@ -1258,37 +1258,37 @@ public class TimeBasedTranslator {
      */
     private String generateActionModules(List<TransitionInfo> transitions) {
         StringBuilder sb = new StringBuilder();
-        
+
         if (transitions.isEmpty()) {
             sb.append("// No action transition modules found in Soar rules\n");
             return sb.toString();
         }
-        
+
         // Generate a module for each unique transition type
         for (TransitionInfo transition : transitions) {
             sb.append(generateTransitionModule(transition));
             sb.append("\n");
         }
-        
+
         return sb.toString();
     }
-    
+
     /**
      * Extract transition information from Soar rules
      */
     private List<TransitionInfo> extractTransitionRules() {
         List<TransitionInfo> transitions = new ArrayList<>();
-        
+
         for (Rule rule : rules.rules) {
             // Look for apply* transition rules
             if (rule.ruleName.startsWith("apply*apply-") && rule.ruleName.contains("-transition")) {
                 TransitionInfo info = new TransitionInfo();
                 info.ruleName = rule.ruleName;
-                
+
                 // Extract transition name (e.g., "SS", "D", "DD")
                 String transName = rule.ruleName.replace("apply*apply-", "").replace("-transition", "");
                 info.transitionName = transName;
-                
+
                 // Extract TO action value from RHS lines
                 // Look for pattern like "(<s> ^action 0 +)"
                 for (String rhsLine : rule.rhsLines) {
@@ -1309,7 +1309,7 @@ public class TimeBasedTranslator {
                         }
                     }
                 }
-                
+
                 // If still not found, try valueMap
                 if (info.toAction < 0 && rule.valueMap.containsKey("action")) {
                     try {
@@ -1318,7 +1318,7 @@ public class TimeBasedTranslator {
                         System.err.println("Could not parse action value: " + rule.valueMap.get("action"));
                     }
                 }
-                
+
                 // Fallback: infer from transition name based on common patterns
                 if (info.toAction < 0) {
                     if (transName.equals("SS")) {
@@ -1329,7 +1329,7 @@ public class TimeBasedTranslator {
                         info.toAction = 2; // DD -> Scan-and-Select (action 2)
                     }
                 }
-                
+
                 // Find corresponding propose rule to get FROM action
                 String proposeRuleName = "propose*" + transName + "-transition";
                 for (Rule proposeRule : rules.rules) {
@@ -1376,7 +1376,7 @@ public class TimeBasedTranslator {
                                 }
                             }
                         }
-                        
+
                         // CRITICAL FIX: If we didn't extract action info, use fallback based on transition name
                         if ((info.fromActions == null || info.fromActions.isEmpty()) && info.fromAction < 0) {
                             System.err.println("WARNING: Could not extract fromAction for " + transName + ", using fallback");
@@ -1388,7 +1388,7 @@ public class TimeBasedTranslator {
                                 System.err.println("INFO: Using fallback fromActions for SS-transition: " + info.fromActions);
                             }
                         }
-                        
+
                         // Extract PDF value from input-link references
                         // Look for patterns like "(<sd> ^pdf2 <pdf2>)" in conditions
                         for (String var : proposeRule.variables) {
@@ -1399,7 +1399,7 @@ public class TimeBasedTranslator {
                         }
                     }
                 }
-                
+
                 // Extract event name from RHS lines
                 for (String rhsLine : rule.rhsLines) {
                     if (rhsLine.contains("event") && rhsLine.contains("+") && !rhsLine.contains("-")) {
@@ -1415,28 +1415,28 @@ public class TimeBasedTranslator {
                         }
                     }
                 }
-                
+
                 transitions.add(info);
             }
         }
-        
+
         return transitions;
     }
-    
+
     /**
      * Generate a PRISM module for a transition
      */
     private String generateTransitionModule(TransitionInfo info) {
         StringBuilder sb = new StringBuilder();
-        
+
         // Module name based on transition
         String moduleName = info.transitionName.toLowerCase() + "_transition";
-        
+
         sb.append(String.format("module %s\n", moduleName));
         sb.append(String.format("  %s_done : [0..1] init 0;\n", moduleName));
         sb.append(String.format("  %s_ing  : [0..1] init 0;\n", moduleName));
         sb.append("\n");
-        
+
         // Generate transition rules
         // Guard: action matches from state, not done, not in progress
         String actionVar = getActionVarName();
@@ -1451,18 +1451,18 @@ public class TimeBasedTranslator {
         } else if (info.fromAction >= 0) {
             actionGuard = actionVar + "=" + info.fromAction;
         }
-        
+
         // Start transition - always generate if we have action info
         if (!actionGuard.isEmpty()) {
             sb.append(String.format("  [sync] time_counter < TOTAL_TIME & %s & %s_done=0 & %s_ing=0 ->\n",
-                actionGuard, moduleName, moduleName));
+                    actionGuard, moduleName, moduleName));
             sb.append(String.format("    (%s_ing' = 1);\n", moduleName));
             sb.append("\n");
         } else {
             // Fallback: generate with true guard (should not normally happen)
             System.err.println("Warning: No action guard found for " + moduleName);
         }
-        
+
         // Complete transition (probabilistic if PDF available)
         if (info.pdfName != null && !info.pdfName.isEmpty()) {
             // Look up PDF value
@@ -1473,11 +1473,11 @@ public class TimeBasedTranslator {
                     pdfValue = ((Number)pdfObj).doubleValue();
                 }
             }
-            
+
             if (pdfValue > 0) {
                 sb.append(String.format("  [sync] %s_ing=1 ->\n", moduleName));
                 sb.append(String.format("    %.6f : (%s_done' = 1) & (%s_ing' = 0)\n",
-                    pdfValue, moduleName, moduleName));
+                        pdfValue, moduleName, moduleName));
                 sb.append(String.format("  + %.6f : (%s_ing' = 0);\n", 1.0 - pdfValue, moduleName));
                 sb.append("\n");
             }
@@ -1485,32 +1485,32 @@ public class TimeBasedTranslator {
             // Deterministic transition
             sb.append(String.format("  [sync] %s_ing=1 ->\n", moduleName));
             sb.append(String.format("    (%s_done' = 1) & (%s_ing' = 0);\n",
-                moduleName, moduleName));
+                    moduleName, moduleName));
             sb.append("\n");
         }
-        
+
         // Reset done flag
         sb.append(String.format("  [sync] %s_done=1 & !(%s_ing=1) -> (%s_done' = 0);\n", moduleName, moduleName, moduleName));
         sb.append("\n");
-        
+
         // Else clause - no change when none of the above conditions hold
         StringBuilder elseGuard = new StringBuilder();
         elseGuard.append(String.format("!(%s_done=1 & !(%s_ing=1))", moduleName, moduleName));
         elseGuard.append(String.format(" & !(%s_ing=1)", moduleName));
         if (!actionGuard.isEmpty()) {
             elseGuard.append(String.format(" & !(time_counter < TOTAL_TIME & %s & %s_done=0 & %s_ing=0)",
-                actionGuard, moduleName, moduleName));
+                    actionGuard, moduleName, moduleName));
         }
-        
+
         sb.append(String.format("  [sync] %s ->\n", elseGuard.toString()));
         sb.append(String.format("    (%s_done' = %s_done) & (%s_ing' = %s_ing);\n",
-            moduleName, moduleName, moduleName, moduleName));
-        
+                moduleName, moduleName, moduleName, moduleName));
+
         sb.append("endmodule\n");
-        
+
         return sb.toString();
     }
-    
+
     /**
      * Helper class to store transition information
      */
@@ -1523,7 +1523,7 @@ public class TimeBasedTranslator {
         String eventName;
         String pdfName;
     }
-    
+
     /**
      * Generate reward structures
      * Provides rewards for mission completion, decision quality, and time efficiency
@@ -1531,44 +1531,44 @@ public class TimeBasedTranslator {
     private String generateRewards() {
         StringBuilder sb = new StringBuilder();
         sb.append("\n// ---- Reward Structures ----\n");
-        
+
         // Mission completion reward
         sb.append("rewards \"mission_completion\"\n");
         sb.append("  time_counter = TOTAL_TIME : 1;\n");
         sb.append("endrewards\n\n");
-        
+
         // Decision quality reward (if error tracking is enabled)
         if (config != null && !config.getDecisionErrorDistributions().isEmpty()) {
             sb.append("rewards \"decision_quality\"\n");
             sb.append("  decision_correct = 1 : 1;\n");
             sb.append("  decision_correct = 0 : 0;\n");  // Changed from -1 to avoid PRISM negative reward error
             sb.append("endrewards\n\n");
-            
+
             sb.append("rewards \"error_penalty\"\n");
             sb.append("  decision_correct = 0 : 10;\n");
             sb.append("endrewards\n\n");
         }
-        
+
         // Time efficiency reward (penalize time spent)
         sb.append("rewards \"time_cost\"\n");
         sb.append("  time_counter < TOTAL_TIME : 1;\n");
         sb.append("endrewards\n\n");
-        
+
         // Response time reward (if response tracking is enabled)
         if (config != null && !config.getResponseSelect().isEmpty()) {
             sb.append("rewards \"response_efficiency\"\n");
             sb.append("  response_state > 0 : 1;\n");
             sb.append("endrewards\n\n");
         }
-        
+
         // Sickness penalty
         sb.append("rewards \"sickness_penalty\"\n");
         sb.append("  sick = 1 : 1;\n");
         sb.append("endrewards\n");
-        
+
         return sb.toString();
     }
-    
+
     /**
      * Find a probability value from the rules or config
      */
@@ -1585,7 +1585,7 @@ public class TimeBasedTranslator {
                 System.err.println("Could not parse " + probName + ": " + value);
             }
         }
-        
+
         // Check all rules
         for (Rule rule : rules.rules) {
             if (rule.valueMap.containsKey(probName)) {
