@@ -934,13 +934,6 @@ public class TimeBasedTranslator {
         }
         sb.append("\n");
         
-        sb.append("  // ---- commit at window end ----\n");
-        // Generate commit transitions at window ends - use dynamic variable names
-        for (int commitTime : commitTimes) {
-            sb.append(String.format("  [sync] time_counter = %4d -> (%s' = %s);\n", 
-                commitTime, sickVar, tsVar));
-        }
-        
         sb.append("\n  // ---- sample at window start (automatically in sickness monitor mode) ----\n");
         // Generate sampling transitions at window starts - use dynamic variable names
         // Note: We assume the model is always in sickness_monitor mode at window starts due to initialization
@@ -959,12 +952,20 @@ public class TimeBasedTranslator {
         }
         
         // Reset sickness_checked at one step before each window (to enable re-sampling)
-        sb.append("  // ---- reset sickness_checked before each window ----\n");
-        for (int window : timeWindows) {
-            if (window > 0) {  // Don't reset before time 0
-                sb.append(String.format("  [sync] time_counter = %4d & %s=1 -> (%s' = 0);\n",
-                    window - 1, sicknessCheckedVar, sicknessCheckedVar));
-            }
+        // Integrated with commit transitions to avoid overlap
+        sb.append("  // ---- commit at window end (with sickness_checked reset) ----\n");
+        // The commit times happen to be exactly one step before the next window
+        // So we can integrate the reset logic here
+        // But we need separate transitions based on sickness_checked state
+        sb.append("  // Note: Window ends double as resets for next window sampling\n");
+        for (int i = 0; i < commitTimes.size(); i++) {
+            int commitTime = commitTimes.get(i);
+            // When sickness_checked=0, just commit
+            sb.append(String.format("  [sync] time_counter = %4d & %s=0 -> (%s' = %s);\n", 
+                commitTime, sicknessCheckedVar, sickVar, tsVar));
+            // When sickness_checked=1, commit AND reset for next sampling
+            sb.append(String.format("  [sync] time_counter = %4d & %s=1 -> (%s' = %s) & (%s' = 0);\n", 
+                commitTime, sicknessCheckedVar, sickVar, tsVar, sicknessCheckedVar));
         }
         sb.append("\n");
         
@@ -977,23 +978,15 @@ public class TimeBasedTranslator {
         // Build guard that excludes all specific conditions above
         List<String> excludeConditions = new ArrayList<>();
         
-        // Exclude commit times
+        // Exclude commit times (both sickness_checked=0 and sickness_checked=1 cases)
         for (int commitTime : commitTimes) {
             excludeConditions.add(String.format("time_counter = %d", commitTime));
         }
         
-        // Exclude sampling windows
+        // Exclude sampling windows (when sickness_checked=0, regardless of sick state)
         for (int window : timeWindows) {
             excludeConditions.add(String.format("(time_counter = %d & %s=0)", 
                 window, sicknessCheckedVar));
-        }
-        
-        // Exclude reset times
-        for (int window : timeWindows) {
-            if (window > 0) {
-                excludeConditions.add(String.format("(time_counter = %d & %s=1)",
-                    window - 1, sicknessCheckedVar));
-            }
         }
         
         // Build the exclusion guard
