@@ -970,7 +970,41 @@ public class TimeBasedTranslator {
         
         // Generate default/else transition - use dynamic variable names
         // This ensures the module always has a transition enabled (prevents deadlocks)
-        sb.append("  [sync] true ->\n");
+        // Must be mutually exclusive with all other transitions above
+        sb.append("  // ---- default transition (keeps state unchanged) ----\n");
+        sb.append("  [sync] ");
+        
+        // Build guard that excludes all specific conditions above
+        List<String> excludeConditions = new ArrayList<>();
+        
+        // Exclude commit times
+        for (int commitTime : commitTimes) {
+            excludeConditions.add(String.format("time_counter = %d", commitTime));
+        }
+        
+        // Exclude sampling windows
+        for (int window : timeWindows) {
+            excludeConditions.add(String.format("(time_counter = %d & %s=0)", 
+                window, sicknessCheckedVar));
+        }
+        
+        // Exclude reset times
+        for (int window : timeWindows) {
+            if (window > 0) {
+                excludeConditions.add(String.format("(time_counter = %d & %s=1)",
+                    window - 1, sicknessCheckedVar));
+            }
+        }
+        
+        // Build the exclusion guard
+        for (int i = 0; i < excludeConditions.size(); i++) {
+            if (i > 0) sb.append(" & ");
+            sb.append("!(");
+            sb.append(excludeConditions.get(i));
+            sb.append(")");
+        }
+        
+        sb.append(" ->\n");
         sb.append(String.format("    (%s' = %s) & (%s' = %s) & (%s' = %s) & (%s' = %s);\n", 
             sickVar, sickVar, tsVar, tsVar, sicknessCheckedVar, sicknessCheckedVar, nameVar, nameVar));
         
