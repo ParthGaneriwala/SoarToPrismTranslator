@@ -934,73 +934,43 @@ public class TimeBasedTranslator {
         }
         sb.append("\n");
         
-        sb.append("  // ---- switch to sickness monitor at window starts ----\n");
-        // Switch from mission_monitor to sickness_monitor at each window start
-        for (int window : timeWindows) {
-            sb.append(String.format("  [sync] time_counter = %4d & %s=mission_monitor -> (%s' = sickness_monitor) & (%s' = %s) & (%s' = %s) & (%s' = %s);\n",
-                window, nameVar, nameVar, sickVar, sickVar, tsVar, tsVar, sicknessCheckedVar, sicknessCheckedVar));
-        }
-        
-        sb.append("\n  // ---- commit at window end ----\n");
+        sb.append("  // ---- commit at window end ----\n");
         // Generate commit transitions at window ends - use dynamic variable names
         for (int commitTime : commitTimes) {
             sb.append(String.format("  [sync] time_counter = %4d -> (%s' = %s);\n", 
                 commitTime, sickVar, tsVar));
         }
         
-        sb.append("\n  // ---- sample at window start (one check per visit) ----\n");
+        sb.append("\n  // ---- sample at window start (automatically in sickness monitor mode) ----\n");
         // Generate sampling transitions at window starts - use dynamic variable names
+        // Note: We assume the model is always in sickness_monitor mode at window starts due to initialization
+        // or we can simplify by removing the name check entirely
         for (int window : timeWindows) {
-            // Sample when not sick
-            sb.append(String.format("  [sync] time_counter = %4d & %s=sickness_monitor & %s=0 & %s=0 ->\n",
-                window, nameVar, sicknessCheckedVar, sickVar));
+            // Sample when not sick (probabilistic)
+            sb.append(String.format("  [sync] time_counter = %4d & %s=0 & %s=0 ->\n",
+                window, sicknessCheckedVar, sickVar));
             sb.append(String.format("        pdf1     : (%s'=0) & (%s'=1)\n", tsVar, sicknessCheckedVar));
             sb.append(String.format("      + (1-pdf1) : (%s'=1) & (%s'=1);\n", tsVar, sicknessCheckedVar));
             
             // Sample when sick (stays sick)
-            sb.append(String.format("  [sync] time_counter = %4d & %s=sickness_monitor & %s=0 & %s=1 ->\n",
-                window, nameVar, sicknessCheckedVar, sickVar));
+            sb.append(String.format("  [sync] time_counter = %4d & %s=0 & %s=1 ->\n",
+                window, sicknessCheckedVar, sickVar));
             sb.append(String.format("        1 : (%s'=1) & (%s'=1);\n\n", tsVar, sicknessCheckedVar));
         }
         
-        // Switch back to mission monitor - use dynamic variable names
-        sb.append(String.format("  [sync] %s = sickness_monitor & %s = 1 &\n", nameVar, sicknessCheckedVar));
-        // Dynamically generate window exclusions
-        sb.append("  ");
-        for (int i = 0; i < timeWindows.size(); i++) {
-            if (i > 0) sb.append(" & ");
-            sb.append(String.format("time_counter != %d", timeWindows.get(i)));
-        }
-        sb.append(" &\n");
-        // Dynamically generate commit time exclusions
-        sb.append("  ");
-        for (int i = 0; i < commitTimes.size(); i++) {
-            if (i > 0) sb.append(" & ");
-            sb.append(String.format("time_counter != %d", commitTimes.get(i)));
+        // Reset sickness_checked at one step before each window (to enable re-sampling)
+        sb.append("  // ---- reset sickness_checked before each window ----\n");
+        for (int window : timeWindows) {
+            if (window > 0) {  // Don't reset before time 0
+                sb.append(String.format("  [sync] time_counter = %4d & %s=1 -> (%s' = 0);\n",
+                    window - 1, sicknessCheckedVar, sicknessCheckedVar));
+            }
         }
         sb.append("\n");
-        sb.append("->\n");
-        sb.append(String.format("  (%s' = mission_monitor) & (%s' = 0);\n\n", nameVar, sicknessCheckedVar));
         
         // Generate default/else transition - use dynamic variable names
-        sb.append("  [sync]\n");
-        // Dynamically generate commit time exclusions for else guard
-        sb.append("    ");
-        for (int i = 0; i < commitTimes.size(); i++) {
-            if (i > 0) sb.append(" & ");
-            sb.append(String.format("time_counter != %d", commitTimes.get(i)));
-        }
-        sb.append(" &\n");
-        // Dynamically generate window check exclusion
-        sb.append("    !((");
-        for (int i = 0; i < timeWindows.size(); i++) {
-            if (i > 0) sb.append(" | ");
-            sb.append(String.format("time_counter = %4d", timeWindows.get(i)));
-        }
-        sb.append(") &\n");
-        sb.append(String.format("      %s = sickness_monitor & %s = 0) &\n", nameVar, sicknessCheckedVar));
-        sb.append(String.format("    !(%s = sickness_monitor & %s = 1)\n", nameVar, sicknessCheckedVar));
-        sb.append("  ->\n");
+        // This ensures the module always has a transition enabled (prevents deadlocks)
+        sb.append("  [sync] true ->\n");
         sb.append(String.format("    (%s' = %s) & (%s' = %s) & (%s' = %s) & (%s' = %s);\n", 
             sickVar, sickVar, tsVar, tsVar, sicknessCheckedVar, sicknessCheckedVar, nameVar, nameVar));
         
