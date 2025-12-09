@@ -1338,88 +1338,52 @@ public class TimeBasedTranslator {
                         System.err.println("DEBUG: Processing propose rule: " + proposeRuleName);
                         System.err.println("DEBUG: Guards found: " + proposeRule.guards);
                         // Extract FROM action from guards
+                        // The guard might be in various formats:
+                        // - Simple: "action = 0"
+                        // - Set notation: "action { << 3 2 >> }" (may be stored as "action = { << 3 2 >> }" or similar)
                         for (String guard : proposeRule.guards) {
                             // Normalize guard to handle variations (state_action, action, etc.)
                             String normalizedGuard = guard.toLowerCase().replace("state_", "");
                             if (normalizedGuard.contains("action")) {
                                 System.err.println("DEBUG: Found action guard in " + proposeRuleName + ": " + guard);
                                 
-                                // First try to extract from raw condition lines for better parsing
-                                boolean foundInConditions = false;
-                                for (String cond : proposeRule.conditionLines) {
-                                    if (cond.contains("^action") && cond.contains("<<") && cond.contains(">>")) {
-                                        // Pattern like: (<s> ^action { << 3 2 >> })
-                                        int start = cond.indexOf("<<");
-                                        int end = cond.indexOf(">>");
-                                        if (start >= 0 && end > start) {
-                                            String actionPart = cond.substring(start + 2, end).trim();
-                                            String[] actions = actionPart.split("\\s+");
-                                            info.fromActions = new ArrayList<>();
-                                            for (String a : actions) {
+                                // Check if this guard contains set notation << >>
+                                if (guard.contains("<<") && guard.contains(">>")) {
+                                    // Multiple values like "action { << 3 2 >> }" or "action = { << 3 2 >> }"
+                                    int start = guard.indexOf("<<");
+                                    int end = guard.indexOf(">>");
+                                    if (start >= 0 && end > start) {
+                                        String actionPart = guard.substring(start + 2, end).trim();
+                                        String[] actions = actionPart.split("\\s+");
+                                        info.fromActions = new ArrayList<>();
+                                        for (String a : actions) {
+                                            a = a.trim();
+                                            if (!a.isEmpty()) {
                                                 try {
                                                     info.fromActions.add(Integer.parseInt(a));
                                                 } catch (NumberFormatException e) {
-                                                    System.err.println("DEBUG: Could not parse action value from condition: " + a);
-                                                }
-                                            }
-                                            System.err.println("DEBUG: Extracted fromActions from condition lines: " + info.fromActions);
-                                            foundInConditions = true;
-                                            break;
-                                        }
-                                    } else if (cond.contains("^action") && !cond.contains("<<")) {
-                                        // Simple pattern like: (<s> ^action 0)
-                                        String cleaned = cond.replaceAll("[<>()^{}]", " ").trim();
-                                        String[] parts = cleaned.split("\\s+");
-                                        for (int i = 0; i < parts.length; i++) {
-                                            if (parts[i].equals("action") && i + 1 < parts.length) {
-                                                try {
-                                                    int val = Integer.parseInt(parts[i + 1]);
-                                                    info.fromAction = val;
-                                                    System.err.println("DEBUG: Extracted fromAction from condition: " + val);
-                                                    foundInConditions = true;
-                                                    break;
-                                                } catch (NumberFormatException e) {
-                                                    // Not a number, continue
+                                                    System.err.println("DEBUG: Could not parse action value from guard: " + a);
                                                 }
                                             }
                                         }
-                                        if (foundInConditions) break;
-                                    }
-                                }
-                                
-                                if (foundInConditions) {
-                                    break; // Found action in conditions, stop looking
-                                }
-                                
-                                // Fallback to guard parsing
-                                // Parse guards like "action = 0", "action { << 3 2 >> }", or "action = state_action"
-                                if (guard.contains("<<") && guard.contains(">>")) {
-                                    // Multiple values like "action { << 3 2 >> }"
-                                    String actionPart = guard.substring(guard.indexOf("<<") + 2, guard.indexOf(">>"));
-                                    String[] actions = actionPart.trim().split("\\s+");
-                                    info.fromActions = new ArrayList<>();
-                                    for (String a : actions) {
-                                        try {
-                                            info.fromActions.add(Integer.parseInt(a));
-                                        } catch (NumberFormatException e) {
-                                            System.err.println("DEBUG: Could not parse action value: " + a);
+                                        if (!info.fromActions.isEmpty()) {
+                                            System.err.println("DEBUG: Extracted fromActions from guards: " + info.fromActions);
+                                            break; // Found the action guard, stop looking
                                         }
                                     }
-                                    System.err.println("DEBUG: Extracted fromActions from guards: " + info.fromActions);
-                                    break; // Found the action guard, stop looking
                                 } else if (guard.contains("=")) {
                                     // Single value like "action = 0" (but not "action = state_action")
                                     String[] parts = guard.split("=");
                                     if (parts.length > 1) {
                                         String actionValue = parts[1].trim();
-                                        // Skip if it's a variable reference
-                                        if (!actionValue.contains("state_") && !actionValue.contains("<")) {
+                                        // Skip if it's a variable reference or contains < > (template variables)
+                                        if (!actionValue.contains("state_") && !actionValue.contains("<") && !actionValue.isEmpty()) {
                                             try {
                                                 info.fromAction = Integer.parseInt(actionValue);
                                                 System.err.println("DEBUG: Extracted fromAction from guards: " + info.fromAction);
                                                 break; // Found the action guard, stop looking
                                             } catch (NumberFormatException e) {
-                                                System.err.println("DEBUG: Could not parse action value: " + actionValue);
+                                                System.err.println("DEBUG: Could not parse action value from guard: " + actionValue);
                                             }
                                         }
                                     }
