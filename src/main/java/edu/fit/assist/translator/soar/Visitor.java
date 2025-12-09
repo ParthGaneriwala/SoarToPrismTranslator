@@ -418,12 +418,26 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
 
     /**
      * Visit a parse tree produced by {@link SoarParser#disjunction_test}.
-     *
+     * Extracts values from << value1 value2 ... >> syntax
      * @param ctx the parse tree
      * @return the visitor result
      */
     @Override
     public Object visitDisjunction_test(SoarParser.Disjunction_testContext ctx) {
+        // Extract all constants from << ... >>
+        List<SoarParser.ConstantContext> constants = ctx.constant();
+        if (constants != null && !constants.isEmpty()) {
+            StringBuilder result = new StringBuilder();
+            result.append("<< ");
+            for (int i = 0; i < constants.size(); i++) {
+                result.append(constants.get(i).getText());
+                if (i < constants.size() - 1) {
+                    result.append(" ");
+                }
+            }
+            result.append(" >>");
+            return (Object) result.toString();
+        }
         return visitChildren(ctx);
     }
 
