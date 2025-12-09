@@ -449,8 +449,9 @@ public class TimeBasedTranslator {
         // Look for SS-transition (scan-and-select) and D-transition (deciding)
         List<TransitionInfo> transitions = extractTransitionRules();
         
-        // Default: use initial action state for selecting
-        selectActionTrigger = maxAction; 
+        // NEW CYCLE: 0 → 1 → 2 → 3 → 1 → 2 → 3...
+        // Default: use initial action state (0) for selecting
+        selectActionTrigger = 0;  // Initial state in new cycle
         
         for (TransitionInfo trans : transitions) {
             String name = trans.transitionName.toLowerCase();
@@ -458,15 +459,14 @@ public class TimeBasedTranslator {
             // SS-transition: fromActions tells us which states are "selecting" states
             // Agent is in Scan-and-Select mode BEFORE this transition
             if ((name.startsWith("ss") || name.contains("scan")) && trans.fromActions != null && trans.fromActions.size() > 0) {
-                // Use the first (typically highest) fromAction as the primary select trigger
-                // In Soar: propose*SS-transition has ^action { << 3 2 >> } meaning select happens when action=3 or action=2
-                selectActionTrigger = trans.fromActions.get(0);  // Typically 3 (initial state)
+                // Use the first fromAction as the primary select trigger
+                // In new cycle: propose*SS-transition should have action {<< 0 3 >>} meaning select happens when action=0 or action=3
+                selectActionTrigger = trans.fromActions.get(0);  // Typically 0 (initial state) or 3 (after DD)
             }
             
-            // D-transition: toAction tells us the state AFTER deciding starts
-            // But we want the state WHERE deciding happens (the fromAction)
+            // D-transition: fromAction tells us the state WHERE deciding happens
             if ((name.startsWith("d-") || name.equals("d")) && !name.contains("dd") && trans.fromAction >= 0) {
-                decideActionTrigger = trans.fromAction;  // D transition: deciding happens when action=0
+                decideActionTrigger = trans.fromAction;  // D transition: deciding happens at fromAction
             }
         }
         
@@ -1320,13 +1320,14 @@ public class TimeBasedTranslator {
                 }
                 
                 // Fallback: infer from transition name based on common patterns
+                // NEW CYCLE: 0 → 1 → 2 → 3 → 1 → 2 → 3 → 1...
                 if (info.toAction < 0) {
                     if (transName.equals("SS")) {
-                        info.toAction = 0; // SS -> Deciding (action 0)
+                        info.toAction = 1; // SS -> (action 1)
                     } else if (transName.equals("D")) {
-                        info.toAction = 1; // D -> Decided (action 1)
+                        info.toAction = 2; // D -> (action 2)
                     } else if (transName.equals("DD")) {
-                        info.toAction = 2; // DD -> Scan-and-Select (action 2)
+                        info.toAction = 3; // DD -> (action 3)
                     }
                 }
                 
@@ -1342,6 +1343,55 @@ public class TimeBasedTranslator {
                             String normalizedGuard = guard.toLowerCase().replace("state_", "");
                             if (normalizedGuard.contains("action")) {
                                 System.err.println("DEBUG: Found action guard in " + proposeRuleName + ": " + guard);
+                                
+                                // First try to extract from raw condition lines for better parsing
+                                boolean foundInConditions = false;
+                                for (String cond : proposeRule.conditionLines) {
+                                    if (cond.contains("^action") && cond.contains("<<") && cond.contains(">>")) {
+                                        // Pattern like: (<s> ^action { << 3 2 >> })
+                                        int start = cond.indexOf("<<");
+                                        int end = cond.indexOf(">>");
+                                        if (start >= 0 && end > start) {
+                                            String actionPart = cond.substring(start + 2, end).trim();
+                                            String[] actions = actionPart.split("\\s+");
+                                            info.fromActions = new ArrayList<>();
+                                            for (String a : actions) {
+                                                try {
+                                                    info.fromActions.add(Integer.parseInt(a));
+                                                } catch (NumberFormatException e) {
+                                                    System.err.println("DEBUG: Could not parse action value from condition: " + a);
+                                                }
+                                            }
+                                            System.err.println("DEBUG: Extracted fromActions from condition lines: " + info.fromActions);
+                                            foundInConditions = true;
+                                            break;
+                                        }
+                                    } else if (cond.contains("^action") && !cond.contains("<<")) {
+                                        // Simple pattern like: (<s> ^action 0)
+                                        String cleaned = cond.replaceAll("[<>()^{}]", " ").trim();
+                                        String[] parts = cleaned.split("\\s+");
+                                        for (int i = 0; i < parts.length; i++) {
+                                            if (parts[i].equals("action") && i + 1 < parts.length) {
+                                                try {
+                                                    int val = Integer.parseInt(parts[i + 1]);
+                                                    info.fromAction = val;
+                                                    System.err.println("DEBUG: Extracted fromAction from condition: " + val);
+                                                    foundInConditions = true;
+                                                    break;
+                                                } catch (NumberFormatException e) {
+                                                    // Not a number, continue
+                                                }
+                                            }
+                                        }
+                                        if (foundInConditions) break;
+                                    }
+                                }
+                                
+                                if (foundInConditions) {
+                                    break; // Found action in conditions, stop looking
+                                }
+                                
+                                // Fallback to guard parsing
                                 // Parse guards like "action = 0", "action { << 3 2 >> }", or "action = state_action"
                                 if (guard.contains("<<") && guard.contains(">>")) {
                                     // Multiple values like "action { << 3 2 >> }"
@@ -1355,7 +1405,7 @@ public class TimeBasedTranslator {
                                             System.err.println("DEBUG: Could not parse action value: " + a);
                                         }
                                     }
-                                    System.err.println("DEBUG: Extracted fromActions: " + info.fromActions);
+                                    System.err.println("DEBUG: Extracted fromActions from guards: " + info.fromActions);
                                     break; // Found the action guard, stop looking
                                 } else if (guard.contains("=")) {
                                     // Single value like "action = 0" (but not "action = state_action")
@@ -1366,7 +1416,7 @@ public class TimeBasedTranslator {
                                         if (!actionValue.contains("state_") && !actionValue.contains("<")) {
                                             try {
                                                 info.fromAction = Integer.parseInt(actionValue);
-                                                System.err.println("DEBUG: Extracted fromAction: " + info.fromAction);
+                                                System.err.println("DEBUG: Extracted fromAction from guards: " + info.fromAction);
                                                 break; // Found the action guard, stop looking
                                             } catch (NumberFormatException e) {
                                                 System.err.println("DEBUG: Could not parse action value: " + actionValue);
@@ -1378,13 +1428,14 @@ public class TimeBasedTranslator {
                         }
                         
                         // CRITICAL FIX: If we didn't extract action info, use fallback based on transition name
+                        // NEW CYCLE: 0 → 1 → 2 → 3 → 1 → 2 → 3 → 1...
                         if ((info.fromActions == null || info.fromActions.isEmpty()) && info.fromAction < 0) {
                             System.err.println("WARNING: Could not extract fromAction for " + transName + ", using fallback");
-                            // For SS-transition: should trigger from states 3 and 2 (scan-and-select states)
+                            // For SS-transition: should trigger from state 0 (and possibly state 3 after DD)
                             if (transName.toLowerCase().contains("ss") || transName.toLowerCase().contains("scan")) {
                                 info.fromActions = new ArrayList<>();
-                                info.fromActions.add(3);  // Initial scan-and-select state
-                                info.fromActions.add(2);  // DD-transition leads to state 2 (back to scan-and-select)
+                                info.fromActions.add(0);  // Initial state
+                                info.fromActions.add(3);  // DD-transition leads to state 3 (back to scan-and-select)
                                 System.err.println("INFO: Using fallback fromActions for SS-transition: " + info.fromActions);
                             }
                         }
