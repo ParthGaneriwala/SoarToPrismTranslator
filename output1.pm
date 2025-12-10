@@ -16,11 +16,11 @@ module time
 endmodule
 
 module action_state
-  state_action : [0..3] init 3;
+  state_action : [0..3] init 0;
 
-  [sync] ss_transition_ing=1 & !(d_transition_ing=1) & !(dd_transition_ing=1) -> (state_action' = 0);
-  [sync] d_transition_ing=1 & !(ss_transition_ing=1) & !(dd_transition_ing=1) -> (state_action' = 1);
-  [sync] dd_transition_ing=1 & !(ss_transition_ing=1) & !(d_transition_ing=1) -> (state_action' = 2);
+  [sync] ss_transition_ing=1 & !(d_transition_ing=1) & !(dd_transition_ing=1) -> (state_action' = 1);
+  [sync] d_transition_ing=1 & !(ss_transition_ing=1) & !(dd_transition_ing=1) -> (state_action' = 2);
+  [sync] dd_transition_ing=1 & !(ss_transition_ing=1) & !(d_transition_ing=1) -> (state_action' = 3);
 
   [sync] !(ss_transition_ing=1) & !(d_transition_ing=1) & !(dd_transition_ing=1) -> (state_action' = state_action);
 endmodule
@@ -83,7 +83,7 @@ module ss_transition
   ss_transition_done : [0..1] init 0;
   ss_transition_ing  : [0..1] init 0;
 
-  [sync] time_counter < TOTAL_TIME & (state_action=3 | state_action=2) & ss_transition_done=0 & ss_transition_ing=0 ->
+  [sync] time_counter < TOTAL_TIME & (state_action=0 | state_action=3) & ss_transition_done=0 & ss_transition_ing=0 ->
     (ss_transition_ing' = 1);
 
   [sync] ss_transition_ing=1 ->
@@ -91,7 +91,7 @@ module ss_transition
 
   [sync] ss_transition_done=1 & !(ss_transition_ing=1) -> (ss_transition_done' = 0);
 
-  [sync] !(ss_transition_done=1 & !(ss_transition_ing=1)) & !(ss_transition_ing=1) & !(time_counter < TOTAL_TIME & (state_action=3 | state_action=2) & ss_transition_done=0 & ss_transition_ing=0) ->
+  [sync] !(ss_transition_done=1 & !(ss_transition_ing=1)) & !(ss_transition_ing=1) & !(time_counter < TOTAL_TIME & (state_action=0 | state_action=3) & ss_transition_done=0 & ss_transition_ing=0) ->
     (ss_transition_done' = ss_transition_done) & (ss_transition_ing' = ss_transition_ing);
 endmodule
 
@@ -99,7 +99,7 @@ module d_transition
   d_transition_done : [0..1] init 0;
   d_transition_ing  : [0..1] init 0;
 
-  [sync] time_counter < TOTAL_TIME & state_action=0 & d_transition_done=0 & d_transition_ing=0 ->
+  [sync] time_counter < TOTAL_TIME & state_action=1 & d_transition_done=0 & d_transition_ing=0 ->
     (d_transition_ing' = 1);
 
   [sync] d_transition_ing=1 ->
@@ -107,7 +107,7 @@ module d_transition
 
   [sync] d_transition_done=1 & !(d_transition_ing=1) -> (d_transition_done' = 0);
 
-  [sync] !(d_transition_done=1 & !(d_transition_ing=1)) & !(d_transition_ing=1) & !(time_counter < TOTAL_TIME & state_action=0 & d_transition_done=0 & d_transition_ing=0) ->
+  [sync] !(d_transition_done=1 & !(d_transition_ing=1)) & !(d_transition_ing=1) & !(time_counter < TOTAL_TIME & state_action=1 & d_transition_done=0 & d_transition_ing=0) ->
     (d_transition_done' = d_transition_done) & (d_transition_ing' = d_transition_ing);
 endmodule
 
@@ -115,7 +115,7 @@ module dd_transition
   dd_transition_done : [0..1] init 0;
   dd_transition_ing  : [0..1] init 0;
 
-  [sync] time_counter < TOTAL_TIME & state_action=1 & dd_transition_done=0 & dd_transition_ing=0 ->
+  [sync] time_counter < TOTAL_TIME & state_action=2 & dd_transition_done=0 & dd_transition_ing=0 ->
     (dd_transition_ing' = 1);
 
   [sync] dd_transition_ing=1 ->
@@ -123,7 +123,7 @@ module dd_transition
 
   [sync] dd_transition_done=1 & !(dd_transition_ing=1) -> (dd_transition_done' = 0);
 
-  [sync] !(dd_transition_done=1 & !(dd_transition_ing=1)) & !(dd_transition_ing=1) & !(time_counter < TOTAL_TIME & state_action=1 & dd_transition_done=0 & dd_transition_ing=0) ->
+  [sync] !(dd_transition_done=1 & !(dd_transition_ing=1)) & !(dd_transition_ing=1) & !(time_counter < TOTAL_TIME & state_action=2 & dd_transition_done=0 & dd_transition_ing=0) ->
     (dd_transition_done' = dd_transition_done) & (dd_transition_ing' = dd_transition_ing);
 endmodule
 
@@ -135,8 +135,8 @@ module response_time
   response_type  : [0..2] init 0;   // 0 = none, 1 = select, 2 = decide
 
   // ---- Scan-and-Select Response Distribution ----
-  // Triggered when state_action=3 (selecting state)
-  [sync] state_action=3 & response_state=0 & state_sickness_time_interval_set=0 ->
+  // Triggered when state_action=0 (selecting state)
+  [sync] state_action=0 & response_state=0 & state_sickness_time_interval_set=0 ->
     0.1254891290537226 : (response_state'=0) & (response_type'=1) +
     0.1193689520108686 : (response_state'=1) & (response_type'=1) +
     0.1135989662203803 : (response_state'=2) & (response_type'=1) +
@@ -155,7 +155,7 @@ module response_time
     0.0086309711025747 : (response_state'=55) & (response_type'=1) +
     0.0067678108588700 : (response_state'=60) & (response_type'=1);
 
-  [sync] state_action=3 & response_state=0 & state_sickness_time_interval_set=1 ->
+  [sync] state_action=0 & response_state=0 & state_sickness_time_interval_set=1 ->
     0.0730289997437676 : (response_state'=0) & (response_type'=1) +
     0.0723023490551863 : (response_state'=1) & (response_type'=1) +
     0.0715829677091855 : (response_state'=2) & (response_type'=1) +
@@ -176,7 +176,7 @@ module response_time
 
   // ---- Decision Response Distribution ----
   // Triggered when action transitions to deciding state
-  [sync] state_action=0 & response_state=0 & state_sickness_time_interval_set=0 ->
+  [sync] state_action=1 & response_state=0 & state_sickness_time_interval_set=0 ->
     0.0991187524522147 : (response_state'=0) & (response_type'=2) +
     0.0971560696534812 : (response_state'=1) & (response_type'=2) +
     0.0952456326231711 : (response_state'=2) & (response_type'=2) +
@@ -195,7 +195,7 @@ module response_time
     0.0186116170691301 : (response_state'=55) & (response_type'=2) +
     0.0159292151610216 : (response_state'=60) & (response_type'=2);
 
-  [sync] state_action=0 & response_state=0 & state_sickness_time_interval_set=1 ->
+  [sync] state_action=1 & response_state=0 & state_sickness_time_interval_set=1 ->
     0.0730289997437676 : (response_state'=0) & (response_type'=2) +
     0.0723023490551863 : (response_state'=1) & (response_type'=2) +
     0.0715829677091855 : (response_state'=2) & (response_type'=2) +
@@ -215,14 +215,14 @@ module response_time
     0.0404575538311526 : (response_state'=60) & (response_type'=2);
 
   // ---- Response Progress ----
-  [sync] response_state > 0 & !(state_action=3 & response_state=0) & !(state_action=0 & response_state=0) -> (response_state' = response_state - 1);
+  [sync] response_state > 0 & !(state_action=0 & response_state=0) & !(state_action=1 & response_state=0) -> (response_state' = response_state - 1);
 
   // ---- Idle State ----
-  [sync] response_state = 0 & response_type > 0 & state_action != 3 & state_action != 0 ->
+  [sync] response_state = 0 & response_type > 0 & state_action != 0 & state_action != 1 ->
     (response_state' = 0) & (response_type' = 0);
 
   // ---- Default ----
-  [sync] response_state = 0 & response_type = 0 & state_action != 0 & state_action != 3 ->
+  [sync] response_state = 0 & response_type = 0 & state_action != 1 & state_action != 0 ->
     (response_state' = response_state) & (response_type' = response_type);
 endmodule
 
@@ -233,20 +233,20 @@ module decision_errors
   error_count      : [0..10] init 0; // Track cumulative errors
 
   // ---- Decision Correctness Sampling ----
-  // Sample when deciding (state_action=0) and response completes
+  // Sample when deciding (state_action=1) and response completes
 
   // Healthy agent decision correctness
-  [sync] state_action=0 & response_state=1 & state_sickness_time_interval_set=0 ->
+  [sync] state_action=1 & response_state=1 & state_sickness_time_interval_set=0 ->
     0.9990000000 : (decision_correct'=1) +
     0.0010000000 : (decision_correct'=0) & (error_count'=min(error_count+1,10));
 
   // Sick agent decision correctness
-  [sync] state_action=0 & response_state=1 & state_sickness_time_interval_set=1 ->
+  [sync] state_action=1 & response_state=1 & state_sickness_time_interval_set=1 ->
     0.9950000000 : (decision_correct'=1) +
     0.0050000000 : (decision_correct'=0) & (error_count'=min(error_count+1,10));
 
   // ---- Default State Maintenance ----
-  [sync] !(state_action=0 & response_state=1) ->
+  [sync] !(state_action=1 & response_state=1) ->
     (decision_correct' = decision_correct) & (error_count' = error_count);
 endmodule
 

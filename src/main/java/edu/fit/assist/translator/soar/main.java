@@ -80,7 +80,6 @@ public class main{
             // Check for time-related variables
             if (rule.valueMap.containsKey("time-counter") ||
                     rule.valueMap.containsKey("total-time") ||
-                    rule.ruleName.contains("sickness") ||
                     rule.ruleName.contains("time")) {
                 return true;
             }
