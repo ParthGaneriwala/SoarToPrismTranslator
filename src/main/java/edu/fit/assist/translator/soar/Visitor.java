@@ -11,6 +11,10 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
 
     public SoarRules rules;
     String currentActionContextVar = "";
+    
+    // Constants for special valueMap markers
+    private static final String INCREMENT_SUFFIX = "_INCREMENT";
+    private static final String OPERATOR_NAME_SUFFIX = "_operator_name";
     /**
      * Visit a parse tree produced by {@link SoarParser#soar}.
      *
@@ -634,7 +638,9 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
         // Store operator name in valueMap for later extraction
         if (attributeName.equals("name") && currentActionContextVar.equals("<o>") && val != null) {
             // Store in valueMap with full context so Translate.java can find it
-            String operatorNameKey = currentContext.replace("state_", "") + "_operator_name";
+            String contextWithoutPrefix = currentContext.startsWith("state_") ? 
+                currentContext.substring(6) : currentContext;
+            String operatorNameKey = contextWithoutPrefix + OPERATOR_NAME_SUFFIX;
             currentRule.valueMap.put(operatorNameKey, val);
         }
 
@@ -651,7 +657,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
 
             if (prismVar != null) {
                 // Store increment info in valueMap as a special marker
-                currentRule.valueMap.put(prismVar, innerVar + "_INCREMENT");
+                currentRule.valueMap.put(prismVar, innerVar + INCREMENT_SUFFIX);
             } else {
                 System.out.println("WARNING: Missing context for 1 + <" + innerVar + "> in rule " + currentRule.ruleName);
             }
