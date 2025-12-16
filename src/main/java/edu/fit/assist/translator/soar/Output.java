@@ -1,7 +1,6 @@
 package edu.fit.assist.translator.soar;
 
 import java.util.*;
-import java.util.LinkedList;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -232,10 +231,10 @@ public class Output {
                 continue;
             }
             int startNodeType = rules.mapNameToType.get(startNode);
-            LinkedList<String> queue = new LinkedList<String>();
+            ArrayList<String> queue = new ArrayList<String>();
             queue.add(startNode);
             while(!queue.isEmpty()){
-                String currentNode = queue.removeFirst();
+                String currentNode = queue.remove(0);
                 if(!rules.typeGraph.containsKey(currentNode)){
                     continue;
                 }
