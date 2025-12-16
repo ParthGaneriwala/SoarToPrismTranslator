@@ -68,35 +68,87 @@ Searched GitHub issues and pull requests:
 
 ## Findings
 
-### Repository State
-- **Total commits**: 2
-- **Contributors**: 2 (Parth Ganeriwala, copilot-swe-agent[bot])
-- **Creation date**: December 2025 (recent)
-- **Branches**: Main branch only (plus current working branch)
+### Repository State  
+- **Total commits**: 62 (in full history)
+- **Contributors**: Multiple including Parth Ganeriwala, hafeezkhan909, web-flow
+- **Main branch HEAD**: commit 2c54d14 (Dec 10, 2025) by Parth Ganeriwala
+- **Branches**: Main branch, plus working branches
 
-### Commit History
+### hafeezkhan909 Commits (July 31, 2025)
 
-1. **Commit 2c54d14** (2025-12-10)
-   - Author: Parth Ganeriwala
-   - Message: "fixed disjunction tests"
+Found **5 commits** by hafeezkhan909 in the main branch history:
 
-2. **Commit 9bac7dd** (2025-12-16)
-   - Author: copilot-swe-agent[bot]
-   - Message: "Initial plan"
+1. **edf7e975** (20:16:18) - "parse soar rules individually with error handling"
+   - File: main.java
+   - Changes: +29/-24 lines
+   - Impact: Splits Soar input by rules, parses each individually with try-catch error handling
+   - **Status**: ACTIVELY USED - this is the current parsing approach
 
-### hafeezkhan909 Presence
-- **Git commits**: None
-- **Code references**: None
-- **Documentation mentions**: None
-- **Issue/PR mentions**: None (except this investigation PR)
+2. **e5939a92** (20:23:25) - "replace ArrayList with LinkedList to support removeFirst()"
+   - File: Output.java  
+   - Changes: +2/-1 lines
+   - Impact: Changed `ArrayList<String> queue` to `LinkedList<String> queue`
+   - **Status**: ACTIVELY USED - `queue.removeFirst()` called in line 238
 
-## Conclusions
+3. **9cacca04** (20:26:06) - "Add RHS and increment assignment tracking to Rule"
+   - File: Rule.java
+   - Changes: +50/-41 lines
+   - Added fields: `rhsLines` ArrayList, `incrementAssignments` ArrayList
+   - Added methods: `addRHSLine()`, `addIncrementAssignment()`
+   - **Status**: PARTIALLY USED
+     - `rhsLines`: ACTIVELY USED in TimeBasedTranslator.java (2x) and Translate.java (1x)
+     - `incrementAssignments`: DEFINED BUT NEVER USED (dead code)
 
-### Primary Conclusion
-**There are no commits from hafeezkhan909 in this repository.** Therefore:
-- No code changes to remove or revert
-- No dead code attributable to this user
-- No impact on codebase from removing non-existent commits
+4. **8fb2fa3e** (20:39:15) - "Added support for phase logic..." (LARGEST CHANGE)
+   - File: Translate.java
+   - Changes: +148/-78 lines (226 total changes)
+   - Impact: Major refactoring with phase logic for propose/apply stages
+   - Added: Global phase variable, operator name tracking, increment expression handling
+   - **Status**: ACTIVELY USED - core functionality in Translate.java
+
+5. **7fe73117** (20:47:10) - "support RHS operator name extraction and increment handling"
+   - File: Visitor.java
+   - Changes: +53/-33 lines
+   - Added: RHS operator name extraction, increment expression parsing
+   - **Status**: ACTIVELY USED
+     - Calls `currentRule.addRHSLine()` at line 636
+     - Calls `currentRule.addIncrementAssignment()` at line 651
+
+## Code Usage Analysis
+
+### Dependencies Found:
+
+**ACTIVELY USED** (removing would break functionality):
+1. Individual rule parsing with error handling (main.java)
+2. LinkedList.removeFirst() in Output.java  
+3. rhsLines field and addRHSLine() method - used in 3 places
+4. Phase logic in Translate.java - major functionality
+5. RHS operator extraction in Visitor.java
+
+**DEAD CODE** (never referenced):
+1. `incrementAssignments` field in Rule.java - defined but never used
+2. `addIncrementAssignment()` is called but `incrementAssignments` list is never read
+
+## Impact Assessment
+
+### If hafeezkhan909's commits are reverted:
+
+**WILL BREAK**:
+- ❌ Soar rule parsing (main.java) - will parse all rules at once, losing error isolation
+- ❌ Variable declaration generation (Output.java) - will crash on `removeFirst()` 
+- ❌ RHS processing (Visitor.java + Rule.java) - lose operator name extraction
+- ❌ Phase-based translation (Translate.java) - lose propose/apply separation logic
+- ❌ TimeBasedTranslator - depends on rhsLines field
+
+**Estimated Impact**: ~282 lines of active code would be removed, breaking core functionality
+
+### Conclusion
+
+**hafeezkhan909's commits contain ESSENTIAL functionality**, not dead code:
+- 95% of the changes are actively used
+- Only `incrementAssignments` ArrayList appears to be dead code (~2 lines)
+- The changes represent significant feature additions to the translator
+- Parth Ganeriwala continued building on top of these changes in December 2025
 
 ### Possible Scenarios
 
