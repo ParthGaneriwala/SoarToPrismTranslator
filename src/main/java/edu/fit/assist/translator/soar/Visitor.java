@@ -631,24 +631,27 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
         currentContext = variable;
         String val = (String)visit(value);
 
-        // Use the class-level variable
+        // Store operator name in valueMap for later extraction
         if (attributeName.equals("name") && currentActionContextVar.equals("<o>") && val != null) {
-            currentRule.addRHSLine("(<o> ^name " + val + ")");
+            // Store in valueMap with full context so Translate.java can find it
+            String operatorNameKey = currentContext.replace("state_", "") + "_operator_name";
+            currentRule.valueMap.put(operatorNameKey, val);
         }
 
         if (val == null) {
             return null;
         }
 
-        // Handle increment expression (+ 1 <var>)
+        // Handle increment expression (+ 1 <var>) by storing in valueMap
         if (val != null && val.matches("\\(\\+ 1 <.*>\\)")) {
             // Extract variable from expression like (+ 1 <lc>)
             String innerVar = val.replaceAll("[()<>]", "")
                     .replace("+ 1 ", "").trim();
-            String prismVar = cleanVariableName(currentContext); // state_latency_counter, etc.
+            String prismVar = cleanVariableName(currentContext);
 
             if (prismVar != null) {
-                currentRule.addIncrementAssignment(prismVar, innerVar);
+                // Store increment info in valueMap as a special marker
+                currentRule.valueMap.put(prismVar, innerVar + "_INCREMENT");
             } else {
                 System.out.println("WARNING: Missing context for 1 + <" + innerVar + "> in rule " + currentRule.ruleName);
             }

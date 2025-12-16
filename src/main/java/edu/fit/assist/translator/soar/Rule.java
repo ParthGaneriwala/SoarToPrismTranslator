@@ -18,9 +18,6 @@ public class Rule {
     boolean isElaboration = false;
     LinkedHashMap<String, Double> valueProbs;
 
-    // Holds the RHS (action) lines of the rule
-    public ArrayList<String> rhsLines;
-
     public Rule(String name, LinkedHashMap<String, Variable> map) {
         this.ruleName = name;
         this.contextMap = new HashMap<>();
@@ -30,7 +27,6 @@ public class Rule {
         this.valueMap = new LinkedHashMap<>();
         this.valueProbs = new LinkedHashMap<>();
         this.groupedAssignments = new LinkedHashMap<>();
-        this.rhsLines = new ArrayList<>();
     }
 
     public String formatGuard() {
@@ -99,16 +95,5 @@ public class Rule {
             var = "<" + var + ">";
         }
         return contextMap.get(var);
-    }
-
-    // Add RHS line
-    public void addRHSLine(String line) {
-        rhsLines.add(line);
-    }
-
-    public ArrayList<String> incrementAssignments = new ArrayList<>();
-
-    public void addIncrementAssignment(String variable, String originalVar) {
-        incrementAssignments.add(variable + "' = " + variable + " + 1");
     }
 }
