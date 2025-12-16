@@ -15,31 +15,17 @@ public class main{
 
             // Read all Soar files recursively
             String fullSoarText = Input.getSoarRules(loadPath);
-            String[] perRuleBlocks = fullSoarText.split("(?=sp\\s\\*\\s)"); // split by "sp *"
+
+            // Parse all rules together
+            ANTLRInputStream input = new ANTLRInputStream(fullSoarText);
+            SoarLexer lexer = new SoarLexer(input);
+            CommonTokenStream tokens = new CommonTokenStream(lexer);
+            SoarParser parser = new SoarParser(tokens);
+            SoarParser.SoarContext tree = parser.soar();
 
             Visitor visitor = new Visitor();
             visitor.rules = new SoarRules();
-
-            for (String ruleBlock : perRuleBlocks) {
-                try {
-                    ANTLRInputStream input = new ANTLRInputStream(ruleBlock);
-                    SoarLexer lexer = new SoarLexer(input);
-                    CommonTokenStream tokens = new CommonTokenStream(lexer);
-                    SoarParser parser = new SoarParser(tokens);
-                    SoarParser.SoarContext tree = parser.soar();
-
-                    if (tree == null) {
-                        System.err.println("warning: skipping rule block due to null tree:\n" + ruleBlock);
-                        continue;
-                    }
-
-                    visitor.visit(tree);
-
-                } catch (Exception e) {
-                    System.err.println("\n ERROR while processing rule:\n" + ruleBlock);
-                    e.printStackTrace();
-                }
-            }
+            visitor.visit(tree);
 
             // Check if this is a time-based model
             boolean isTimeBasedModel = hasTimeBasedRules(visitor.rules);

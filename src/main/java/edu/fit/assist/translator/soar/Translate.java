@@ -167,20 +167,22 @@ public class Translate {
     private String extractOperatorNameFromPropose(Rule rule) {
         System.out.println("DEBUG: Extracting operator name from propose rule: " + rule.ruleName);
 
-        for (String line : rule.rhsLines) {
-            System.out.println("  Checking RHS line: " + line);
-            if (line.contains("^name")) {
-                String[] parts = line.split("\\^name");
-                if (parts.length > 1) {
-                    String raw = parts[1].replaceAll("[()<>]", "").trim();
-                    System.out.println("    Raw extracted after ^name: '" + raw + "'");
-                    String[] tokens = raw.split("\\s+");
-                    if (tokens.length > 0) {
-                        System.out.println("    Candidate operator name token: '" + tokens[0] + "'");
-                        if (tokens[0].startsWith("apply-")) {
-                            System.out.println("    -> Matched operator name: '" + tokens[0] + "'");
-                            return tokens[0];
-                        }
+        // Check valueMap for operator name entries (state_operator_name or similar)
+        for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
+            String key = entry.getKey();
+            String value = entry.getValue();
+            System.out.println("  Checking valueMap entry: " + key + " = " + value);
+
+            // Look for operator name in valueMap entries
+            if (key.contains("operator") && key.contains("name")) {
+                String raw = value.replaceAll("[()<>]", "").trim();
+                System.out.println("    Raw extracted operator name: '" + raw + "'");
+                String[] tokens = raw.split("\\s+");
+                if (tokens.length > 0) {
+                    System.out.println("    Operator name: '" + tokens[0] + "'");
+                    if (tokens[0].startsWith("apply-")) {
+                        System.out.println("    -> Matched operator name: '" + tokens[0] + "'");
+                        return tokens[0];
                     }
                 }
             }

@@ -1289,28 +1289,20 @@ public class TimeBasedTranslator {
                 String transName = rule.ruleName.replace("apply*apply-", "").replace("-transition", "");
                 info.transitionName = transName;
 
-                // Extract TO action value from RHS lines
-                // Look for pattern like "(<s> ^action 0 +)"
-                for (String rhsLine : rule.rhsLines) {
-                    if (rhsLine.contains("action") && rhsLine.contains("+") && !rhsLine.contains("-")) {
-                        // Extract the action value
-                        // Pattern: "(<s> ^action 0 +)" or similar
-                        String cleaned = rhsLine.replaceAll("[<>()^+\\s]", " ").trim();
-                        String[] parts = cleaned.split("\\s+");
-                        for (int i = 0; i < parts.length; i++) {
-                            if (parts[i].equals("action") && i + 1 < parts.length) {
-                                try {
-                                    info.toAction = Integer.parseInt(parts[i + 1]);
-                                    break;
-                                } catch (NumberFormatException e) {
-                                    // Not a number, continue
-                                }
-                            }
+                // Extract TO action value from valueMap
+                // Check for action in valueMap entries
+                for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
+                    if (entry.getKey().contains("action")) {
+                        try {
+                            info.toAction = Integer.parseInt(entry.getValue());
+                            break;
+                        } catch (NumberFormatException e) {
+                            // Not a number, continue
                         }
                     }
                 }
 
-                // If still not found, try valueMap
+                // Fallback: try direct "action" key
                 if (info.toAction < 0 && rule.valueMap.containsKey("action")) {
                     try {
                         info.toAction = Integer.parseInt(rule.valueMap.get("action"));
@@ -1415,19 +1407,11 @@ public class TimeBasedTranslator {
                     }
                 }
 
-                // Extract event name from RHS lines
-                for (String rhsLine : rule.rhsLines) {
-                    if (rhsLine.contains("event") && rhsLine.contains("+") && !rhsLine.contains("-")) {
-                        // Extract event value
-                        // Pattern: "(<out> ^event Deciding +)" or similar
-                        String cleaned = rhsLine.replaceAll("[<>()^+]", " ").trim();
-                        String[] parts = cleaned.split("\\s+");
-                        for (int i = 0; i < parts.length; i++) {
-                            if (parts[i].equals("event") && i + 1 < parts.length) {
-                                info.eventName = parts[i + 1];
-                                break;
-                            }
-                        }
+                // Extract event name from valueMap
+                for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
+                    if (entry.getKey().contains("event")) {
+                        info.eventName = entry.getValue();
+                        break;
                     }
                 }
 
