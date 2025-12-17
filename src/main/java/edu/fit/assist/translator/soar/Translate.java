@@ -1,7 +1,6 @@
 package edu.fit.assist.translator.soar;
 
 import java.util.*;
-import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 
 import static edu.fit.assist.translator.soar.TranslatorUtils.*;
@@ -12,6 +11,12 @@ public class Translate {
         this.rules = rules;
     }
 
+    /**
+     * Build a PRISM DTMC model for non time-based Soar rules by:
+     * 1) declaring globals for constants and discovered state variables
+     * 2) generating propose/apply transitions with sequential operator ids
+     * 3) emitting operator mappings for traceability
+     */
     String translateSoarToPrismGeneral() {
         StringBuilder output = new StringBuilder();
 
