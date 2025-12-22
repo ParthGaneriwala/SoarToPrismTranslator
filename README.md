@@ -174,6 +174,13 @@ soar-to-prism-translator/
 - Implements a **Visitor** or **Listener** pattern to walk the parse tree.
 - Outputs equivalent **PRISM modules**, assuming a deterministic or DTMC structure.
 
+### Translation Flow (Input → Parser → Refinement → Output)
+
+1. **Input** – `main` loads the provided Soar file (and optional config) and stitches together all rules via `Input.getSoarRules(...)`.
+2. **Parser** – ANTLR (`SoarLexer`/`SoarParser`) builds a parse tree that `Visitor` walks to populate `SoarRules`.
+3. **Refinement** – The translator inspects the collected rules to decide between the general path (`Translate.translateSoarToPrismGeneral`) and the time-based path (`TimeBasedTranslator.translateToTimeBased`), normalizing variables and operator metadata.
+4. **Output** – The selected translator emits PRISM code, which `main` prints to stdout and writes to `output1.pm`.
+
 ---
 
 ## Limitations
