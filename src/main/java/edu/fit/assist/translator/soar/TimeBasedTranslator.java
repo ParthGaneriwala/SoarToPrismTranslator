@@ -1032,7 +1032,10 @@ public class TimeBasedTranslator {
             sb.append(String.format("  // Triggered when %s=%d (selecting state)\n", actionVar, selectActionTrigger));
 
             // Use condition level 0 (baseline) distribution as example
-            PrismConfig.Distribution selectDist = config.getResponseSelect().get("sickness0");
+            PrismConfig.Distribution selectDist = config.getResponseSelect().get("condition0");
+            if (selectDist == null) {
+                selectDist = config.getResponseSelect().get("sickness0");
+            }
             if (selectDist != null && selectDist.probabilities != null) {
                 // Normalize probabilities to sum to exactly 1.0
                 double totalProb = 0.0;
@@ -1066,7 +1069,10 @@ public class TimeBasedTranslator {
             }
 
             // Condition-present agent has different distribution
-            PrismConfig.Distribution selectSickDist = config.getResponseSelect().get("sickness1");
+            PrismConfig.Distribution selectSickDist = config.getResponseSelect().get("condition1");
+            if (selectSickDist == null) {
+                selectSickDist = config.getResponseSelect().get("sickness1");
+            }
             if (selectSickDist != null && selectSickDist.probabilities != null) {
                 // Normalize probabilities to sum to exactly 1.0
                 double totalProb = 0.0;
@@ -1106,7 +1112,10 @@ public class TimeBasedTranslator {
             sb.append("  // Triggered when action transitions to deciding state\n");
 
             // Baseline agent decision response
-            PrismConfig.Distribution decideDist = config.getResponseDecide().get("sickness0");
+            PrismConfig.Distribution decideDist = config.getResponseDecide().get("condition0");
+            if (decideDist == null) {
+                decideDist = config.getResponseDecide().get("sickness0");
+            }
             if (decideDist != null && decideDist.probabilities != null) {
                 // Normalize probabilities to sum to exactly 1.0
                 double totalProb = 0.0;
@@ -1140,7 +1149,10 @@ public class TimeBasedTranslator {
             }
 
             // Condition-present agent decision response
-            PrismConfig.Distribution decideSickDist = config.getResponseDecide().get("sickness1");
+            PrismConfig.Distribution decideSickDist = config.getResponseDecide().get("condition1");
+            if (decideSickDist == null) {
+                decideSickDist = config.getResponseDecide().get("sickness1");
+            }
             if (decideSickDist != null && decideSickDist.probabilities != null) {
                 // Normalize probabilities to sum to exactly 1.0
                 double totalProb = 0.0;
@@ -1214,8 +1226,14 @@ public class TimeBasedTranslator {
         sb.append("  error_count      : [0..10] init 0; // Track cumulative errors\n\n");
 
         // Get error distributions for different condition levels
-        PrismConfig.ErrorDistribution healthyDist = config.getDecisionErrorDistributions().get("sickness0");
-        PrismConfig.ErrorDistribution sickDist = config.getDecisionErrorDistributions().get("sickness1");
+        PrismConfig.ErrorDistribution healthyDist = config.getDecisionErrorDistributions().get("condition0");
+        if (healthyDist == null) {
+            healthyDist = config.getDecisionErrorDistributions().get("sickness0");
+        }
+        PrismConfig.ErrorDistribution sickDist = config.getDecisionErrorDistributions().get("condition1");
+        if (sickDist == null) {
+            sickDist = config.getDecisionErrorDistributions().get("sickness1");
+        }
 
         sb.append("  // ---- Decision Correctness Sampling ----\n");
         sb.append(String.format("  // Sample when deciding (%s=%d) and response completes\n\n",
