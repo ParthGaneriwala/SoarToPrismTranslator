@@ -233,7 +233,7 @@ public class TimeBasedTranslator {
 
     /**
      * Discover which extracted variables correspond to common Soar patterns
-     * Maps generic concepts (action, sickness, etc.) to actual variable names used in this Soar model
+     * Maps generic concepts (action, condition, etc.) to actual variable names used in this Soar model
      */
     private void discoverVariableNames() {
         // Find action variable - look for variables used in transition rules
@@ -322,7 +322,7 @@ public class TimeBasedTranslator {
 
         // Handle monitor names
         if (value.equals("mission-monitor")) return 0;
-        if (value.equals("sickness-monitor")) return 1;
+        if (value.equals("sickness-monitor") || value.equals("condition-monitor")) return 1;
 
         // Parse as number
         return Integer.parseInt(value.trim());
@@ -375,7 +375,7 @@ public class TimeBasedTranslator {
     private void extractMonitorConstants(Rule rule) {
         // Find monitor constant definitions
         for (String guard : rule.guards) {
-            if (guard.contains("mission-monitor") || guard.contains("sickness-monitor")) {
+            if (guard.contains("mission-monitor") || guard.contains("sickness-monitor") || guard.contains("condition-monitor")) {
                 // Extract from guards or valueMap
             }
         }
@@ -383,6 +383,7 @@ public class TimeBasedTranslator {
         // Use standard values if not found
         monitorConstants.put("mission_monitor", 0);
         monitorConstants.put("sickness_monitor", 1);
+        monitorConstants.put("condition_monitor", 1);
     }
 
     /**
@@ -604,7 +605,7 @@ public class TimeBasedTranslator {
         output.append(generateActionStateModule(transitions));
         output.append("\n");
 
-        // Generate sickness module
+        // Generate condition monitoring module
         output.append(generateStateMonitoringModule());
         output.append("\n");
 
@@ -656,7 +657,7 @@ public class TimeBasedTranslator {
                     }
                 }
             }
-            // Check for monitor switching rules to find sickness_monitor
+            // Check for monitor switching rules to find sickness/condition monitor
             if (rule.ruleName.contains("switch-monitor") || rule.ruleName.contains("sickness")) {
                 if (!foundSicknessMonitor) {
                     sb.append(String.format("const int sickness_monitor = %d;\n", SICKNESS_MONITOR));
@@ -931,36 +932,36 @@ public class TimeBasedTranslator {
         }
         sb.append("\n");
 
-        sb.append("\n  // ---- sample at window start (automatically in sickness monitor mode) ----\n");
+        sb.append("\n  // ---- sample at window start (automatically in condition monitor mode) ----\n");
         // Generate sampling transitions at window starts - use dynamic variable names
-        // Note: We assume the model is always in sickness_monitor mode at window starts due to initialization
+        // Note: We assume the model is always in a monitoring mode at window starts due to initialization
         // or we can simplify by removing the name check entirely
         for (int window : timeWindows) {
-            // Sample when not sick (probabilistic)
+            // Sample when condition absent (probabilistic)
             sb.append(String.format("  [sync] time_counter = %4d & %s=0 & %s=0 ->\n",
                     window, samplingFlagVar, conditionVar));
             sb.append(String.format("        pdf1     : (%s'=0) & (%s'=1)\n", tsVar, samplingFlagVar));
             sb.append(String.format("      + (1-pdf1) : (%s'=1) & (%s'=1);\n", tsVar, samplingFlagVar));
 
-            // Sample when sick (stays sick)
+            // Sample when condition present (stays set)
             sb.append(String.format("  [sync] time_counter = %4d & %s=0 & %s=1 ->\n",
                     window, samplingFlagVar, conditionVar));
             sb.append(String.format("        1 : (%s'=1) & (%s'=1);\n\n", tsVar, samplingFlagVar));
         }
 
-        // Reset sickness_checked at one step before each window (to enable re-sampling)
+        // Reset sampling flag at one step before each window (to enable re-sampling)
         // Integrated with commit transitions to avoid overlap
-        sb.append("  // ---- commit at window end (with sickness_checked reset) ----\n");
+        sb.append("  // ---- commit at window end (with sampling flag reset) ----\n");
         // The commit times happen to be exactly one step before the next window
         // So we can integrate the reset logic here
-        // But we need separate transitions based on sickness_checked state
+        // But we need separate transitions based on sampling flag state
         sb.append("  // Note: Window ends double as resets for next window sampling\n");
         for (int i = 0; i < commitTimes.size(); i++) {
             int commitTime = commitTimes.get(i);
-            // When sickness_checked=0, just commit
+            // When samplingFlagVar=0, just commit
             sb.append(String.format("  [sync] time_counter = %4d & %s=0 -> (%s' = %s);\n",
                     commitTime, samplingFlagVar, conditionVar, tsVar));
-            // When sickness_checked=1, commit AND reset for next sampling
+            // When samplingFlagVar=1, commit AND reset for next sampling
             sb.append(String.format("  [sync] time_counter = %4d & %s=1 -> (%s' = %s) & (%s' = 0);\n",
                     commitTime, samplingFlagVar, conditionVar, tsVar, samplingFlagVar));
         }
@@ -975,12 +976,12 @@ public class TimeBasedTranslator {
         // Build guard that excludes all specific conditions above
         List<String> excludeConditions = new ArrayList<>();
 
-        // Exclude commit times (both sickness_checked=0 and sickness_checked=1 cases)
+        // Exclude commit times (both samplingFlagVar=0 and samplingFlagVar=1 cases)
         for (int commitTime : commitTimes) {
             excludeConditions.add(String.format("time_counter = %d", commitTime));
         }
 
-        // Exclude sampling windows (when sickness_checked=0, regardless of sick state)
+        // Exclude sampling windows (when sampling flag = 0, regardless of condition state)
         for (int window : timeWindows) {
             excludeConditions.add(String.format("(time_counter = %d & %s=0)",
                     window, samplingFlagVar));
@@ -1030,7 +1031,7 @@ public class TimeBasedTranslator {
             sb.append("  // ---- Scan-and-Select Response Distribution ----\n");
             sb.append(String.format("  // Triggered when %s=%d (selecting state)\n", actionVar, selectActionTrigger));
 
-            // Use sickness level 0 (healthy) distribution as example
+            // Use condition level 0 (baseline) distribution as example
             PrismConfig.Distribution selectDist = config.getResponseSelect().get("sickness0");
             if (selectDist != null && selectDist.probabilities != null) {
                 // Normalize probabilities to sum to exactly 1.0
@@ -1064,7 +1065,7 @@ public class TimeBasedTranslator {
                 sb.append("\n");
             }
 
-            // Sick agent has different distribution
+            // Condition-present agent has different distribution
             PrismConfig.Distribution selectSickDist = config.getResponseSelect().get("sickness1");
             if (selectSickDist != null && selectSickDist.probabilities != null) {
                 // Normalize probabilities to sum to exactly 1.0
@@ -1104,7 +1105,7 @@ public class TimeBasedTranslator {
             sb.append("  // ---- Decision Response Distribution ----\n");
             sb.append("  // Triggered when action transitions to deciding state\n");
 
-            // Healthy agent decision response
+            // Baseline agent decision response
             PrismConfig.Distribution decideDist = config.getResponseDecide().get("sickness0");
             if (decideDist != null && decideDist.probabilities != null) {
                 // Normalize probabilities to sum to exactly 1.0
@@ -1138,7 +1139,7 @@ public class TimeBasedTranslator {
                 sb.append("\n");
             }
 
-            // Sick agent decision response
+            // Condition-present agent decision response
             PrismConfig.Distribution decideSickDist = config.getResponseDecide().get("sickness1");
             if (decideSickDist != null && decideSickDist.probabilities != null) {
                 // Normalize probabilities to sum to exactly 1.0
@@ -1195,7 +1196,7 @@ public class TimeBasedTranslator {
 
     /**
      * Generate decision error tracking module using loaded error distributions
-     * Models decision correctness based on sickness level
+     * Models decision correctness based on condition level
      */
     private String generateDecisionErrorModule() {
         if (config == null || config.getDecisionErrorDistributions().isEmpty()) {
@@ -1212,7 +1213,7 @@ public class TimeBasedTranslator {
         sb.append("  decision_correct : [0..1] init 1;  // 1 = correct, 0 = error\n");
         sb.append("  error_count      : [0..10] init 0; // Track cumulative errors\n\n");
 
-        // Get error distributions for different sickness levels
+        // Get error distributions for different condition levels
         PrismConfig.ErrorDistribution healthyDist = config.getDecisionErrorDistributions().get("sickness0");
         PrismConfig.ErrorDistribution sickDist = config.getDecisionErrorDistributions().get("sickness1");
 
@@ -1221,7 +1222,7 @@ public class TimeBasedTranslator {
                 actionVar, decideActionTrigger));
 
         if (healthyDist != null) {
-            sb.append("  // Healthy agent decision correctness\n");
+            sb.append("  // Baseline agent decision correctness\n");
             sb.append(String.format("  [sync] %s=%d & response_state=1 & %s=0 ->\n",
                     actionVar, decideActionTrigger, conditionVar));
             sb.append(String.format("    %.10f : (decision_correct'=1) +\n", healthyDist.correctProbability));
@@ -1230,7 +1231,7 @@ public class TimeBasedTranslator {
         }
 
         if (sickDist != null) {
-            sb.append("  // Sick agent decision correctness\n");
+            sb.append("  // Condition-present agent decision correctness\n");
             sb.append(String.format("  [sync] %s=%d & response_state=1 & %s=1 ->\n",
                     actionVar, decideActionTrigger, conditionVar));
             sb.append(String.format("    %.10f : (decision_correct'=1) +\n", sickDist.correctProbability));
