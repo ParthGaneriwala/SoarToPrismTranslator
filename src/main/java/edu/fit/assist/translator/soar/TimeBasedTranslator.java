@@ -286,7 +286,7 @@ public class TimeBasedTranslator {
      * Get the PRISM variable name for monitored condition state
      */
     private String getConditionVarName() {
-        return conditionVarName != null ? conditionVarName : "sick";
+        return conditionVarName != null ? conditionVarName : "condition";
     }
 
     /**
@@ -307,7 +307,7 @@ public class TimeBasedTranslator {
      * Get the PRISM variable name for condition sampling flag
      */
     private String getSamplingFlagVarName() {
-        return samplingFlagVarName != null ? samplingFlagVarName : "sickness_checked";
+        return samplingFlagVarName != null ? samplingFlagVarName : "sampling_checked";
     }
 
     /**
@@ -895,7 +895,7 @@ public class TimeBasedTranslator {
      */
     private String generateStateMonitoringModule() {
         StringBuilder sb = new StringBuilder();
-        sb.append("module sickness\n");
+        sb.append("module condition_monitoring\n");
 
         // State variables - use extracted info instead of hardcoded
         // Get variable names from extracted metadata
