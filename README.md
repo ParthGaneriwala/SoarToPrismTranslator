@@ -1,7 +1,7 @@
 # Soar to PRISM Translator
 
 <p align="center">
-  <img src="logo.png" alt="Soar to PRISM Translator logo" width="520">
+  <img src="soar-prism-logo.png" alt="Soar to PRISM Translator logo" width="520">
 </p>
 
 This project provides a tool for translating cognitive models written in the [Soar cognitive architecture](https://soar.eecs.umich.edu/) into equivalent models in the [PRISM model checker](https://www.prismmodelchecker.org/) formalism. The translation is designed to support formal verification of cognitive models using PRISM’s probabilistic model checking capabilities.
