@@ -20,157 +20,138 @@ The purpose of this translator is to enable:
 ## Project Structure
 
 ```bash
-soar-to-prism-translator/
+SoarToPrismTranslator/
 ├── src/
-│   └── Soar.g4             # ANTLR4 grammar for parsing Soar rules
-├── translator/
-│   ├── Main.java           # Entry point for the translation tool
-│   ├── SoarToPrismVisitor.java # Translation logic using ANTLR visitor pattern
-│   └── ...
+│   └── main/
+│       ├── antlr4/
+│       │   └── edu/fit/assist/soar/
+│       │       └── Soar.g4                # ANTLR4 grammar for parsing Soar rules
+│       └── java/
+│           └── edu/fit/assist/translator/
+│               ├── soar/
+│               │   ├── main.java          # Entry point for the translation tool
+│               │   ├── Visitor.java       # Translation logic using ANTLR visitor pattern
+│               │   ├── Translate.java     # General PRISM translator
+│               │   ├── TimeBasedTranslator.java # Time-based model translator
+│               │   └── ...
+│               └── gen/                   # Generated ANTLR parsers
 ├── models/
-│   ├── soar_model.soar     # Sample Soar input file
-│   └── expected_output.pm  # Corresponding PRISM output
+│   ├── physiology/                        # Physiological models (e.g., sick.pm)
+│   ├── attention/                         # Attention models
+│   └── translated soar models/            # Manually translated PRISM models
+├── CONFIG_GUIDE.md                        # Configuration file documentation
 ├── README.md
-└── pom.xml  # Build file (Maven)
+├── test_config.json                       # Example configuration file
+└── pom.xml                                # Maven build file
 ```
 
 ---
 
 ## Requirements
 
-- Java 11+
-- [ANTLR4](https://www.antlr.org/)
-- Gradle or Maven (for building the project)
+- Java 17+
+- [Apache Maven](https://maven.apache.org/) (for building the project)
+- [ANTLR4](https://www.antlr.org/) (automatically managed by Maven)
 
-[//]: # (---)
+---
 
-[//]: # ()
-[//]: # (## 🚀 Getting Started)
+## 🚀 Getting Started
 
-[//]: # ()
-[//]: # (### 1. Clone the Repository)
+### 1. Clone the Repository
 
-[//]: # (```bash)
+```bash
+git clone https://github.com/ParthGaneriwala/SoarToPrismTranslator.git
+cd SoarToPrismTranslator
+```
 
-[//]: # (git clone https://github.com/yourusername/soar-to-prism-translator.git)
+### 2. Build the Project
 
-[//]: # (cd soar-to-prism-translator)
+The ANTLR4 parser is automatically generated during the Maven build:
 
-[//]: # (```)
+```bash
+mvn clean compile
+```
 
-[//]: # ()
-[//]: # (### 2. Generate the ANTLR4 Parser)
+### 3. Run the Translator
 
-[//]: # (If you're using Gradle:)
+**Important:** Currently, only time-based models (models with time-related variables like `time-counter` or `total-time`) are supported. The general translator for non-time-based models is not functional at this time.
 
-[//]: # (```bash)
+You can run the translator with or without a configuration file:
 
-[//]: # (./gradlew generateGrammarSource)
+**Without configuration (uses inference from Soar rules):**
+```bash
+mvn exec:java -Dexec.mainClass="edu.fit.assist.translator.soar.main" \
+  -Dexec.args="path/to/your/model.soar"
+```
 
-[//]: # (```)
+**With configuration file (for probability distributions and model parameters):**
+```bash
+mvn exec:java -Dexec.mainClass="edu.fit.assist.translator.soar.main" \
+  -Dexec.args="path/to/your/model.soar path/to/config.json"
+```
 
-[//]: # ()
-[//]: # (Or use ANTLR manually:)
+The translated PRISM model will be:
+- Printed to stdout
+- Written to `output1.pm` in the project root
 
-[//]: # (```bash)
+### 4. Configuration Support
 
-[//]: # (antlr4 -Dlanguage=Java grammar/Soar.g4 -o src/gen)
+For complex models requiring probability distributions, response time distributions, or error rates, you can provide an external configuration file. See [CONFIG_GUIDE.md](CONFIG_GUIDE.md) for detailed documentation on:
+- Configuration file format (JSON)
+- Model parameters
+- Probability distributions
+- Sickness probability tables
+- Response and error distributions
 
-[//]: # (```)
+---
 
-[//]: # ()
-[//]: # (### 3. Build the Project)
+## 🧪 Example
 
-[//]: # (```bash)
+### Input (Soar):
+```soar
+sp {propose*initialize
+   (state <s> ^superstate nil
+             -^name)
+-->
+   (<s> ^operator <o> +)
+   (<o> ^name initialize)
+}
 
-[//]: # (./gradlew build)
+sp {apply*initialize
+   (state <s> ^operator.name initialize)
+-->
+   (<s> ^name mission-monitor
+        ^time-counter 0)
+}
+```
 
-[//]: # (```)
+### Output (PRISM):
+```prism
+dtmc
 
-[//]: # ()
-[//]: # (### 4. Run the Translator)
+module mission_monitor
+  state : [0..1] init 0;
+  time_counter : [0..100] init 0;
+  
+  [] state=0 -> (state'=1);
+  [] state=1 & time_counter<100 -> (time_counter'=time_counter+1);
+endmodule
+```
 
-[//]: # (```bash)
+---
 
-[//]: # (java -cp build/libs/soar-to-prism-translator.jar \)
+## 🛠️ Features
 
-[//]: # (     soar.Main examples/soar_model.soar output/generated_model.pm)
+- ✅ Supports production rule parsing (`sp` rules)
+- ✅ Handles state-operator-goal structures
+- ✅ Time-based model translation with time windows
+- ✅ External configuration file support for probability distributions
+- ✅ Automatic module extraction from Soar rule patterns
+- ✅ Variable range inference and normalization
+- ✅ Support for both DTMC and MDP model types
+- ⚠️ General PRISM translation (non-time-based models) is currently not functional
 
-[//]: # (```)
-
-[//]: # ()
-[//]: # (---)
-
-[//]: # ()
-[//]: # (## 🧪 Example)
-
-[//]: # ()
-[//]: # (### Input &#40;Soar&#41;:)
-
-[//]: # (```soar)
-
-[//]: # (sp {decide*init)
-
-[//]: # (   &#40;state <s> ^superstate nil&#41;)
-
-[//]: # (-->)
-
-[//]: # (   &#40;<s> ^operator <o>&#41;)
-
-[//]: # (   &#40;<o> ^name explore&#41;)
-
-[//]: # (})
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (### Output &#40;PRISM&#41;:)
-
-[//]: # (```prism)
-
-[//]: # (module SoarModel)
-
-[//]: # (  s : [0..2] init 0;)
-
-[//]: # ()
-[//]: # (  [] s=0 -> 1.0 : &#40;s'=1&#41;; // explore)
-
-[//]: # (  [] s=1 -> 1.0 : &#40;s'=2&#41;; // next action)
-
-[//]: # (endmodule)
-
-[//]: # (```)
-
-[//]: # (---)
-
-[//]: # (## 🛠️ Features)
-
-[//]: # ()
-[//]: # (- ✅ Supports production rule parsing &#40;`sp` rules&#41;)
-
-[//]: # (- ✅ Handles state-operator-goal structures)
-
-[//]: # (- ✅ Supports conditional logic and rule prioritization &#40;in progress&#41;)
-
-[//]: # (- 🔜 Plans for handling numeric preferences and probabilistic transitions)
-
-[//]: # ()
-[//]: # (---)
-
-[//]: # ()
-[//]: # (## 📖 Using Your Own Soar Models)
-
-[//]: # ()
-[//]: # (Place your `.soar` file in the `examples/` folder, then run:)
-
-[//]: # (```bash)
-
-[//]: # (java -cp build/libs/... soar.Main examples/your_model.soar output/your_model.pm)
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (---)
+---
 
 ## Architecture
 
@@ -182,16 +163,18 @@ soar-to-prism-translator/
 
 1. **Input** – `main` loads the provided Soar file (and optional config) and stitches together all rules via `Input.getSoarRules(...)`.
 2. **Parser** – ANTLR (`SoarLexer`/`SoarParser`) builds a parse tree that `Visitor` walks to populate `SoarRules`.
-3. **Refinement** – The translator inspects the collected rules to decide between the general path (`Translate.translateSoarToPrismGeneral`) and the time-based path (`TimeBasedTranslator.translateToTimeBased`), normalizing variables and operator metadata.
-4. **Output** – The selected translator emits PRISM code, which `main` prints to stdout and writes to `output1.pm`.
+3. **Refinement** – The translator inspects the collected rules to determine if it's a time-based model (by checking for time-related variables like `time-counter` or `total-time`). Currently, only the time-based path (`TimeBasedTranslator.translateToTimeBased`) is functional. The general path (`Translate.translateSoarToPrismGeneral`) is not working at this time.
+4. **Output** – The time-based translator emits PRISM code, which `main` prints to stdout and writes to `output1.pm`.
 
 ---
 
 ## Limitations
 
-- Currently supports only basic production rules and deterministic transitions.
+- **The general translator is currently not functional** - only time-based models are supported.
+- Time-based models must include time-related variables (e.g., `time-counter`, `total-time`) in their Soar rules.
 - Does not yet support numeric preference comparisons or impasses.
 - Translation assumes one-to-one rule-to-transition mapping.
+- Currently supports only basic production rules and deterministic transitions.
 
 ---
 
