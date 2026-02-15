@@ -3,7 +3,6 @@ import edu.fit.assist.translator.gen.*;
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import java.io.*;
-import java.util.stream.Stream;
 
 public class main{
     public static String debugPath = "D:\\ICS_SOAR\\load.soar";
@@ -79,8 +78,21 @@ public class main{
 
         for (Rule rule : rules.rules) {
             // Check for time-related variables
-            boolean hasTimeReference = Stream.concat(rule.valueMap.keySet().stream(), rule.guards.stream())
-                    .anyMatch(text -> TranslatorUtils.containsNameVariant(text, timeVar));
+            boolean hasTimeReference = false;
+            for (String key : rule.valueMap.keySet()) {
+                if (TranslatorUtils.containsNameVariant(key, timeVar)) {
+                    hasTimeReference = true;
+                    break;
+                }
+            }
+            if (!hasTimeReference) {
+                for (String guard : rule.guards) {
+                    if (TranslatorUtils.containsNameVariant(guard, timeVar)) {
+                        hasTimeReference = true;
+                        break;
+                    }
+                }
+            }
             boolean hasTotalTime = rule.valueMap.keySet().stream()
                     .anyMatch(key -> TranslatorUtils.containsNameVariant(key, "total-time"));
             boolean hasTimeInRuleName = TranslatorUtils.containsNameVariant(rule.ruleName, timeVar) ||

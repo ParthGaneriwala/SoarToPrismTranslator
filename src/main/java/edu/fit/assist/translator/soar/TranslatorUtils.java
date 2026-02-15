@@ -3,7 +3,9 @@ package edu.fit.assist.translator.soar;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -11,6 +13,7 @@ import java.util.stream.Collectors;
  * Utility methods to support the data-driven translation from Soar rules to PRISM code.
  */
 public class TranslatorUtils {
+    private static final Map<String, Pattern> NAME_PATTERN_CACHE = new ConcurrentHashMap<>();
 
     /**
      * Finds an apply rule corresponding to the given base name.
@@ -69,14 +72,18 @@ public class TranslatorUtils {
 
         for (Pattern pattern : variants.stream()
                 .filter(v -> !v.isEmpty())
-                .map(v -> "(?<![A-Za-z0-9_])<?" + Pattern.quote(v) + ">?(?![A-Za-z0-9_])")
-                .map(Pattern::compile)
+                .map(TranslatorUtils::compileNamePattern)
                 .collect(Collectors.toList())) {
             if (pattern.matcher(text).find()) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static Pattern compileNamePattern(String variant) {
+        return NAME_PATTERN_CACHE.computeIfAbsent(variant,
+                v -> Pattern.compile("(?<![A-Za-z0-9_])<?" + Pattern.quote(v) + ">?(?![A-Za-z0-9_])"));
     }
 
     /**
