@@ -42,10 +42,14 @@ public class main{
             String translatedText;
             if (isTimeBasedModel) {
                 // Use TimeBasedTranslator for time-window models
-                TimeBasedTranslator timeTranslator = (config != null)
-                        ? new TimeBasedTranslator(visitor.rules, config)
-                        : (configPath != null ? new TimeBasedTranslator(visitor.rules, configPath)
-                        : new TimeBasedTranslator(visitor.rules));
+                TimeBasedTranslator timeTranslator;
+                if (config != null) {
+                    timeTranslator = new TimeBasedTranslator(visitor.rules, config);
+                } else if (configPath != null) {
+                    timeTranslator = new TimeBasedTranslator(visitor.rules, configPath);
+                } else {
+                    timeTranslator = new TimeBasedTranslator(visitor.rules);
+                }
                 translatedText = timeTranslator.translateToTimeBased();
             } else {
                 // Use general translator
@@ -71,15 +75,13 @@ public class main{
         final String timeVar = (config != null && config.getTimeVariable() != null && !config.getTimeVariable().isEmpty())
                 ? config.getTimeVariable()
                 : "time-counter";
-        final String altDash = timeVar.replace('_', '-');
-        final String altUnderscore = timeVar.replace('-', '_');
 
         for (Rule rule : rules.rules) {
             // Check for time-related variables
-            boolean hasTimeInValues = rule.valueMap.keySet().stream().anyMatch(k ->
-                    k.contains(timeVar) || k.contains(altDash) || k.contains(altUnderscore));
-            boolean hasTimeInGuards = rule.guards.stream().anyMatch(g ->
-                    g.contains(timeVar) || g.contains(altDash) || g.contains(altUnderscore));
+            boolean hasTimeInValues = rule.valueMap.keySet().stream()
+                    .anyMatch(k -> TranslatorUtils.containsNameVariant(k, timeVar));
+            boolean hasTimeInGuards = rule.guards.stream()
+                    .anyMatch(g -> TranslatorUtils.containsNameVariant(g, timeVar));
 
             if (hasTimeInValues || hasTimeInGuards ||
                     rule.valueMap.containsKey("total-time") ||

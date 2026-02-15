@@ -47,6 +47,16 @@ public class TranslatorUtils {
     }
 
     /**
+     * Checks whether the provided text contains the given name or its dash/underscore variants.
+     */
+    public static boolean containsNameVariant(String text, String name) {
+        if (text == null || name == null) return false;
+        String altDash = name.replace('_', '-');
+        String altUnderscore = name.replace('-', '_');
+        return text.contains(name) || text.contains(altDash) || text.contains(altUnderscore);
+    }
+
+    /**
      * Extracts the probability expression (variable) from the given propose rule and its
      * matching apply rule. The extraction is done in several steps:
      *

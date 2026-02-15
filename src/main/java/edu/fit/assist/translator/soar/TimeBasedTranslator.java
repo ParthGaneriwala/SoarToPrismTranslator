@@ -85,10 +85,7 @@ public class TimeBasedTranslator {
      * Check if the provided text references the configured time variable name
      */
     private boolean containsTimeVariable(String text) {
-        if (text == null || timeVariableName == null) return false;
-        String normalizedDash = timeVariableName.replace('_', '-');
-        String normalizedUnderscore = timeVariableName.replace('-', '_');
-        return text.contains(timeVariableName) || text.contains(normalizedDash) || text.contains(normalizedUnderscore);
+        return TranslatorUtils.containsNameVariant(text, timeVariableName);
     }
 
     public TimeBasedTranslator(SoarRules rules) {
