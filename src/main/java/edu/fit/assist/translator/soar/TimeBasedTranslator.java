@@ -26,6 +26,7 @@ public class TimeBasedTranslator {
     private List<Integer> commitTimes = new ArrayList<>();
     private Map<String, Object> constantValues = new LinkedHashMap<>();
     private PrismConfig config = null;
+    private String timeVariableName = "time-counter";
 
     // Extracted variable information from Soar
     private Map<String, VariableInfo> stateVariables = new LinkedHashMap<>();
@@ -80,6 +81,16 @@ public class TimeBasedTranslator {
         return name.replace('-', '_');
     }
 
+    /**
+     * Check if the provided text references the configured time variable name
+     */
+    private boolean containsTimeVariable(String text) {
+        if (text == null || timeVariableName == null) return false;
+        String normalizedDash = timeVariableName.replace('_', '-');
+        String normalizedUnderscore = timeVariableName.replace('-', '_');
+        return text.contains(timeVariableName) || text.contains(normalizedDash) || text.contains(normalizedUnderscore);
+    }
+
     public TimeBasedTranslator(SoarRules rules) {
         this.rules = rules;
         extractConfiguration();
@@ -89,19 +100,37 @@ public class TimeBasedTranslator {
      * Constructor with external configuration file
      */
     public TimeBasedTranslator(SoarRules rules, String configPath) {
+        this(rules, loadConfig(configPath));
+    }
+
+    /**
+     * Constructor with preloaded configuration
+     */
+    public TimeBasedTranslator(SoarRules rules, PrismConfig config) {
         this.rules = rules;
-        try {
-            this.config = PrismConfig.loadFromFile(configPath);
-            if (config != null) {
-                // Use config values to override defaults
-                totalTime = config.getTotalTime();
-                constantValues.putAll(config.getConstants());
+        this.config = config;
+        if (config != null) {
+            // Use config values to override defaults
+            totalTime = config.getTotalTime();
+            constantValues.putAll(config.getConstants());
+            if (config.getTimeVariable() != null && !config.getTimeVariable().isEmpty()) {
+                timeVariableName = config.getTimeVariable();
             }
+        }
+        extractConfiguration();
+    }
+
+    private static PrismConfig loadConfig(String configPath) {
+        if (configPath == null) {
+            return null;
+        }
+        try {
+            return PrismConfig.loadFromFile(configPath);
         } catch (IOException e) {
             System.err.println("Warning: Could not load config file " + configPath + ": " + e.getMessage());
             System.err.println("Falling back to rule-based extraction");
+            return null;
         }
-        extractConfiguration();
     }
 
     /**
@@ -484,7 +513,7 @@ public class TimeBasedTranslator {
         for (Rule rule : rules.rules) {
             // Check guards for time-counter comparisons
             for (String guard : rule.guards) {
-                if (guard.contains("time-counter") || guard.contains("time_counter")) {
+                if (containsTimeVariable(guard)) {
                     // Try to extract numeric values from the guard
                     String[] parts = guard.split("\\s+");
                     for (String part : parts) {
@@ -502,7 +531,7 @@ public class TimeBasedTranslator {
 
             // Check valueMap for time-counter updates
             for (Map.Entry<String, String> entry : rule.valueMap.entrySet()) {
-                if (entry.getKey().contains("time-counter") || entry.getKey().contains("time_counter")) {
+                if (containsTimeVariable(entry.getKey())) {
                     String value = entry.getValue();
                     // Check for increment operations like (+ <pdf2> <tc>) or numeric values
                     if (value.matches(".*\\d+.*")) {

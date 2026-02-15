@@ -22,6 +22,7 @@ public class PrismConfig {
     private int sicknessSamplingInterval = 300;
     private int sicknessLevels = 2;
     private int responseDuration = 60;
+    private String timeVariable = "time-counter";
     
     private Map<String, Object> constants = new LinkedHashMap<>();
     private Map<String, Double> sicknessProbabilityTable = new LinkedHashMap<>();
@@ -104,6 +105,9 @@ public class PrismConfig {
                 }
                 if (model.has("responseDuration")) {
                     config.responseDuration = model.get("responseDuration").getAsInt();
+                }
+                if (model.has("timeVariable")) {
+                    config.timeVariable = model.get("timeVariable").getAsString();
                 }
             }
             
@@ -243,6 +247,7 @@ public class PrismConfig {
     public int getSicknessSamplingInterval() { return sicknessSamplingInterval; }
     public int getSicknessLevels() { return sicknessLevels; }
     public int getResponseDuration() { return responseDuration; }
+    public String getTimeVariable() { return timeVariable; }
     public Map<String, Object> getConstants() { return constants; }
     public Map<String, Double> getSicknessProbabilityTable() { return sicknessProbabilityTable; }
     public Map<String, Distribution> getResponseSelect() { return responseSelect; }
