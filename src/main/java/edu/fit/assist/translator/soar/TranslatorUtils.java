@@ -2,6 +2,9 @@ package edu.fit.assist.translator.soar;
 
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * Utility methods to support the data-driven translation from Soar rules to PRISM code.
@@ -50,10 +53,21 @@ public class TranslatorUtils {
      * Checks whether the provided text contains the given name or its dash/underscore variants.
      */
     public static boolean containsNameVariant(String text, String name) {
-        if (text == null || name == null) return false;
-        String altDash = name.replace('_', '-');
-        String altUnderscore = name.replace('-', '_');
-        return text.contains(name) || text.contains(altDash) || text.contains(altUnderscore);
+        if (text == null || name == null || name.isEmpty()) return false;
+
+        Set<String> variants = new LinkedHashSet<>();
+        variants.add(name);
+        variants.add(name.replace('_', '-'));
+        variants.add(name.replace('-', '_'));
+
+        for (String variant : variants) {
+            if (variant.isEmpty()) continue;
+            String pattern = "(?<![A-Za-z0-9_<>])" + Pattern.quote(variant) + "(?![A-Za-z0-9_<>])";
+            if (Pattern.compile(pattern).matcher(text).find()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -26,7 +26,7 @@ public class TimeBasedTranslator {
     private List<Integer> commitTimes = new ArrayList<>();
     private Map<String, Object> constantValues = new LinkedHashMap<>();
     private PrismConfig config = null;
-    private String timeVariableName = "time-counter";
+    private String timeVariableName = PrismConfig.DEFAULT_TIME_VARIABLE;
 
     // Extracted variable information from Soar
     private Map<String, VariableInfo> stateVariables = new LinkedHashMap<>();

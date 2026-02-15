@@ -74,7 +74,7 @@ public class main{
     private static boolean hasTimeBasedRules(SoarRules rules, PrismConfig config) {
         final String timeVar = (config != null && config.getTimeVariable() != null && !config.getTimeVariable().isEmpty())
                 ? config.getTimeVariable()
-                : "time-counter";
+                : PrismConfig.DEFAULT_TIME_VARIABLE;
 
         for (Rule rule : rules.rules) {
             // Check for time-related variables

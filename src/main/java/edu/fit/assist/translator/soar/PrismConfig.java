@@ -15,6 +15,8 @@ import java.util.*;
  * and contains probability distributions, model parameters, and module definitions.
  */
 public class PrismConfig {
+    public static final String DEFAULT_TIME_VARIABLE = "time-counter";
+
     private String modelType = "dtmc";
     private int maxErrorCount = 5;
     private double modelResolution = 1.0;
@@ -22,7 +24,7 @@ public class PrismConfig {
     private int sicknessSamplingInterval = 300;
     private int sicknessLevels = 2;
     private int responseDuration = 60;
-    private String timeVariable = "time-counter";
+    private String timeVariable = DEFAULT_TIME_VARIABLE;
     
     private Map<String, Object> constants = new LinkedHashMap<>();
     private Map<String, Double> sicknessProbabilityTable = new LinkedHashMap<>();
