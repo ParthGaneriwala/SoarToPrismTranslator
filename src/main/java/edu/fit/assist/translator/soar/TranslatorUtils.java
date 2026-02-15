@@ -82,8 +82,11 @@ public class TranslatorUtils {
     }
 
     private static Pattern compileNamePattern(String variant) {
-        return NAME_PATTERN_CACHE.computeIfAbsent(variant,
-                v -> Pattern.compile("(?<![A-Za-z0-9_])<?" + Pattern.quote(v) + ">?(?![A-Za-z0-9_])"));
+        return NAME_PATTERN_CACHE.computeIfAbsent(variant, v -> {
+            String core = Pattern.quote(v);
+            String patternText = "(?<![A-Za-z0-9_])(?:<" + core + ">|" + core + ")(?![A-Za-z0-9_])";
+            return Pattern.compile(patternText);
+        });
     }
 
     /**

@@ -3,6 +3,7 @@ import edu.fit.assist.translator.gen.*;
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import java.io.*;
+import java.util.regex.Pattern;
 
 public class main{
     public static String debugPath = "D:\\ICS_SOAR\\load.soar";
@@ -94,9 +95,9 @@ public class main{
                 }
             }
             boolean hasTotalTime = rule.valueMap.keySet().stream()
-                    .anyMatch(key -> TranslatorUtils.containsNameVariant(key, "total-time"));
+                    .anyMatch(key -> TranslatorUtils.containsNameVariant(key, PrismConfig.DEFAULT_TOTAL_TIME_KEY));
             boolean hasTimeInRuleName = TranslatorUtils.containsNameVariant(rule.ruleName, timeVar) ||
-                    rule.ruleName.toLowerCase().contains("time");
+                    Pattern.compile("\\btime\\b", Pattern.CASE_INSENSITIVE).matcher(rule.ruleName).find();
 
             if (hasTimeReference || hasTotalTime || hasTimeInRuleName) {
                 return true;

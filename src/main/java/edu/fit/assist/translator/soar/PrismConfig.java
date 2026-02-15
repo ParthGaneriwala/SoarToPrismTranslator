@@ -16,6 +16,7 @@ import java.util.*;
  */
 public class PrismConfig {
     public static final String DEFAULT_TIME_VARIABLE = "time-counter";
+    public static final String DEFAULT_TOTAL_TIME_KEY = "total-time";
 
     private String modelType = "dtmc";
     private int maxErrorCount = 5;
