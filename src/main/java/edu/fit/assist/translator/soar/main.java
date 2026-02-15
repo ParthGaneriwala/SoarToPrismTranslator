@@ -7,6 +7,7 @@ import java.util.regex.Pattern;
 
 public class main{
     public static String debugPath = "D:\\ICS_SOAR\\load.soar";
+    private static final Pattern TIME_WORD_PATTERN = Pattern.compile("\\btime\\b", Pattern.CASE_INSENSITIVE);
 
     public static void main(String[] args){
         try{
@@ -43,14 +44,9 @@ public class main{
             String translatedText;
             if (isTimeBasedModel) {
                 // Use TimeBasedTranslator for time-window models
-                TimeBasedTranslator timeTranslator;
-                if (config != null) {
-                    timeTranslator = new TimeBasedTranslator(visitor.rules, config);
-                } else if (configPath != null) {
-                    timeTranslator = new TimeBasedTranslator(visitor.rules, configPath);
-                } else {
-                    timeTranslator = new TimeBasedTranslator(visitor.rules);
-                }
+                TimeBasedTranslator timeTranslator = (config != null)
+                        ? new TimeBasedTranslator(visitor.rules, config)
+                        : new TimeBasedTranslator(visitor.rules);
                 translatedText = timeTranslator.translateToTimeBased();
             } else {
                 // Use general translator
@@ -97,7 +93,7 @@ public class main{
             boolean hasTotalTime = rule.valueMap.keySet().stream()
                     .anyMatch(key -> TranslatorUtils.containsNameVariant(key, PrismConfig.DEFAULT_TOTAL_TIME_KEY));
             boolean hasTimeInRuleName = TranslatorUtils.containsNameVariant(rule.ruleName, timeVar) ||
-                    Pattern.compile("\\btime\\b", Pattern.CASE_INSENSITIVE).matcher(rule.ruleName).find();
+                    TIME_WORD_PATTERN.matcher(rule.ruleName).find();
 
             if (hasTimeReference || hasTotalTime || hasTimeInRuleName) {
                 return true;

@@ -84,7 +84,10 @@ public class TranslatorUtils {
     private static Pattern compileNamePattern(String variant) {
         return NAME_PATTERN_CACHE.computeIfAbsent(variant, v -> {
             String core = Pattern.quote(v);
-            String patternText = "(?<![A-Za-z0-9_])(?:<" + core + ">|" + core + ")(?![A-Za-z0-9_])";
+            String boundary = "[A-Za-z0-9_<>]";
+            String bracketed = "(?<!"+ boundary +")<" + core + ">(?!"+ boundary +")";
+            String unbracketed = "(?<!"+ boundary +")" + core + "(?!"+ boundary +")";
+            String patternText = bracketed + "|" + unbracketed;
             return Pattern.compile(patternText);
         });
     }
