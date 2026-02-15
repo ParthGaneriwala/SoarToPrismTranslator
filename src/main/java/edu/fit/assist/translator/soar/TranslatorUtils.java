@@ -57,13 +57,19 @@ public class TranslatorUtils {
 
         Set<String> variants = new LinkedHashSet<>();
         variants.add(name);
-        variants.add(name.replace('_', '-'));
-        variants.add(name.replace('-', '_'));
+        String dashVariant = name.replace('_', '-');
+        if (!dashVariant.equals(name)) {
+            variants.add(dashVariant);
+        }
+        String underscoreVariant = name.replace('-', '_');
+        if (!underscoreVariant.equals(name)) {
+            variants.add(underscoreVariant);
+        }
 
         for (String variant : variants) {
             if (variant.isEmpty()) continue;
-            // Treat angle brackets as delimiters since Soar variables can be referenced as <var>
-            String pattern = "(?<![A-Za-z0-9_<>])" + Pattern.quote(variant) + "(?![A-Za-z0-9_<>])";
+            // Allow optional angle brackets around variable references such as <var>
+            String pattern = "(?<![A-Za-z0-9_])<?" + Pattern.quote(variant) + ">?(?![A-Za-z0-9_])";
             if (Pattern.compile(pattern).matcher(text).find()) {
                 return true;
             }

@@ -81,10 +81,12 @@ public class main{
             // Check for time-related variables
             boolean hasTimeReference = Stream.concat(rule.valueMap.keySet().stream(), rule.guards.stream())
                     .anyMatch(text -> TranslatorUtils.containsNameVariant(text, timeVar));
+            boolean hasTotalTime = rule.valueMap.keySet().stream()
+                    .anyMatch(key -> TranslatorUtils.containsNameVariant(key, "total-time"));
+            boolean hasTimeInRuleName = TranslatorUtils.containsNameVariant(rule.ruleName, timeVar) ||
+                    rule.ruleName.toLowerCase().contains("time");
 
-            if (hasTimeReference ||
-                    rule.valueMap.containsKey("total-time") ||
-                    rule.ruleName.contains("time")) {
+            if (hasTimeReference || hasTotalTime || hasTimeInRuleName) {
                 return true;
             }
         }
