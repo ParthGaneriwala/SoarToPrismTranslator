@@ -1,19 +1,20 @@
 package edu.fit.assist.translator.soar;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * Utility methods to support the data-driven translation from Soar rules to PRISM code.
  */
 public class TranslatorUtils {
-    private static final Map<String, Pattern> NAME_PATTERN_CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, Pattern[]> NAME_PATTERN_CACHE = new ConcurrentHashMap<>();
 
     /**
      * Finds an apply rule corresponding to the given base name.
@@ -59,6 +60,15 @@ public class TranslatorUtils {
     public static boolean containsNameVariant(String text, String name) {
         if (text == null || name == null || name.isEmpty()) return false;
 
+        for (Pattern pattern : NAME_PATTERN_CACHE.computeIfAbsent(name, TranslatorUtils::buildNamePatterns)) {
+            if (pattern.matcher(text).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Pattern[] buildNamePatterns(String name) {
         Set<String> variants = new LinkedHashSet<>();
         variants.add(name);
         String dashVariant = name.replace('_', '-');
@@ -70,26 +80,15 @@ public class TranslatorUtils {
             variants.add(underscoreVariant);
         }
 
-        for (Pattern pattern : variants.stream()
-                .filter(v -> !v.isEmpty())
-                .map(TranslatorUtils::compileNamePattern)
-                .collect(Collectors.toList())) {
-            if (pattern.matcher(text).find()) {
-                return true;
-            }
+        List<Pattern> patterns = new ArrayList<>();
+        String wordBoundary = "[A-Za-z0-9_]";
+        for (String variant : variants) {
+            if (variant == null || variant.isEmpty()) continue;
+            String core = Pattern.quote(variant);
+            patterns.add(Pattern.compile("(?<!"+ wordBoundary +")<" + core + ">(?!"+ wordBoundary +")"));
+            patterns.add(Pattern.compile("(?<![A-Za-z0-9_<>])" + core + "(?![A-Za-z0-9_<>])"));
         }
-        return false;
-    }
-
-    private static Pattern compileNamePattern(String variant) {
-        return NAME_PATTERN_CACHE.computeIfAbsent(variant, v -> {
-            String core = Pattern.quote(v);
-            String boundary = "[A-Za-z0-9_<>]";
-            String bracketed = "(?<!"+ boundary +")<" + core + ">(?!"+ boundary +")";
-            String unbracketed = "(?<!"+ boundary +")" + core + "(?!"+ boundary +")";
-            String patternText = bracketed + "|" + unbracketed;
-            return Pattern.compile(patternText);
-        });
+        return patterns.toArray(new Pattern[0]);
     }
 
     /**

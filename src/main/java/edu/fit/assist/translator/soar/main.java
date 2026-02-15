@@ -90,12 +90,15 @@ public class main{
                     }
                 }
             }
+            if (hasTimeReference) {
+                return true;
+            }
             boolean hasTotalTime = rule.valueMap.keySet().stream()
                     .anyMatch(key -> TranslatorUtils.containsNameVariant(key, PrismConfig.DEFAULT_TOTAL_TIME_KEY));
             boolean hasTimeInRuleName = TranslatorUtils.containsNameVariant(rule.ruleName, timeVar) ||
                     TIME_WORD_PATTERN.matcher(rule.ruleName).find();
 
-            if (hasTimeReference || hasTotalTime || hasTimeInRuleName) {
+            if (hasTotalTime || hasTimeInRuleName) {
                 return true;
             }
         }
