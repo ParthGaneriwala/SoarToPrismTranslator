@@ -110,9 +110,7 @@ public class TimeBasedTranslator {
             // Use config values to override defaults
             totalTime = config.getTotalTime();
             constantValues.putAll(config.getConstants());
-            if (config.getTimeVariable() != null && !config.getTimeVariable().isEmpty()) {
-                timeVariableName = config.getTimeVariable();
-            }
+            timeVariableName = config.getEffectiveTimeVariable();
         }
         extractConfiguration();
     }

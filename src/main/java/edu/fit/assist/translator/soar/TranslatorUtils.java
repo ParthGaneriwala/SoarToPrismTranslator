@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Utility methods to support the data-driven translation from Soar rules to PRISM code.
@@ -66,11 +67,12 @@ public class TranslatorUtils {
             variants.add(underscoreVariant);
         }
 
-        for (String variant : variants) {
-            if (variant.isEmpty()) continue;
-            // Allow optional angle brackets around variable references such as <var>
-            String pattern = "(?<![A-Za-z0-9_])<?" + Pattern.quote(variant) + ">?(?![A-Za-z0-9_])";
-            if (Pattern.compile(pattern).matcher(text).find()) {
+        for (Pattern pattern : variants.stream()
+                .filter(v -> !v.isEmpty())
+                .map(v -> "(?<![A-Za-z0-9_])<?" + Pattern.quote(v) + ">?(?![A-Za-z0-9_])")
+                .map(Pattern::compile)
+                .collect(Collectors.toList())) {
+            if (pattern.matcher(text).find()) {
                 return true;
             }
         }

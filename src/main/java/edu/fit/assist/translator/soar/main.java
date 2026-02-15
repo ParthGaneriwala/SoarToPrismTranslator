@@ -73,8 +73,8 @@ public class main{
      * Check if this is a time-based model by looking for time-related variables
      */
     private static boolean hasTimeBasedRules(SoarRules rules, PrismConfig config) {
-        final String timeVar = (config != null && config.getTimeVariable() != null && !config.getTimeVariable().isEmpty())
-                ? config.getTimeVariable()
+        final String timeVar = (config != null)
+                ? config.getEffectiveTimeVariable()
                 : PrismConfig.DEFAULT_TIME_VARIABLE;
 
         for (Rule rule : rules.rules) {

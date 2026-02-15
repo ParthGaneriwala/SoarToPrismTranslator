@@ -250,6 +250,9 @@ public class PrismConfig {
     public int getSicknessLevels() { return sicknessLevels; }
     public int getResponseDuration() { return responseDuration; }
     public String getTimeVariable() { return timeVariable; }
+    public String getEffectiveTimeVariable() {
+        return (timeVariable != null && !timeVariable.isEmpty()) ? timeVariable : DEFAULT_TIME_VARIABLE;
+    }
     public Map<String, Object> getConstants() { return constants; }
     public Map<String, Double> getSicknessProbabilityTable() { return sicknessProbabilityTable; }
     public Map<String, Distribution> getResponseSelect() { return responseSelect; }
