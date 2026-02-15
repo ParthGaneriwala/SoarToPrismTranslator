@@ -62,6 +62,7 @@ public class TranslatorUtils {
 
         for (String variant : variants) {
             if (variant.isEmpty()) continue;
+            // Treat angle brackets as delimiters since Soar variables can be referenced as <var>
             String pattern = "(?<![A-Za-z0-9_<>])" + Pattern.quote(variant) + "(?![A-Za-z0-9_<>])";
             if (Pattern.compile(pattern).matcher(text).find()) {
                 return true;
