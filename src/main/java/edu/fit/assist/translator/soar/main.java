@@ -3,9 +3,11 @@ import edu.fit.assist.translator.gen.*;
 import org.antlr.v4.runtime.ANTLRInputStream;
 import org.antlr.v4.runtime.CommonTokenStream;
 import java.io.*;
+import java.util.regex.Pattern;
 
 public class main{
     public static String debugPath = "D:\\ICS_SOAR\\load.soar";
+    private static final Pattern TIME_WORD_PATTERN = Pattern.compile("\\btime\\b", Pattern.CASE_INSENSITIVE);
 
     public static void main(String[] args){
         try{
@@ -26,19 +28,25 @@ public class main{
             visitor.rules = new SoarRules();
             visitor.visit(tree);
 
+            PrismConfig config = null;
+            if (configPath != null) {
+                try {
+                    config = PrismConfig.loadFromFile(configPath);
+                    System.err.println("INFO: Using configuration file: " + configPath);
+                } catch (IOException e) {
+                    System.err.println("Warning: Could not load config file " + configPath + ": " + e.getMessage());
+                }
+            }
+
             // Check if this is a time-based model
-            boolean isTimeBasedModel = hasTimeBasedRules(visitor.rules);
+            boolean isTimeBasedModel = hasTimeBasedRules(visitor.rules, config);
 
             String translatedText;
             if (isTimeBasedModel) {
                 // Use TimeBasedTranslator for time-window models
-                TimeBasedTranslator timeTranslator;
-                if (configPath != null) {
-                    System.err.println("INFO: Using configuration file: " + configPath);
-                    timeTranslator = new TimeBasedTranslator(visitor.rules, configPath);
-                } else {
-                    timeTranslator = new TimeBasedTranslator(visitor.rules);
-                }
+                TimeBasedTranslator timeTranslator = (config != null)
+                        ? new TimeBasedTranslator(visitor.rules, config)
+                        : new TimeBasedTranslator(visitor.rules);
                 translatedText = timeTranslator.translateToTimeBased();
             } else {
                 // Use general translator
@@ -60,12 +68,40 @@ public class main{
     /**
      * Check if this is a time-based model by looking for time-related variables
      */
-    private static boolean hasTimeBasedRules(SoarRules rules) {
+    private static boolean hasTimeBasedRules(SoarRules rules, PrismConfig config) {
+        final String timeVar = (config != null)
+                ? config.getEffectiveTimeVariable()
+                : PrismConfig.DEFAULT_TIME_VARIABLE;
+
         for (Rule rule : rules.rules) {
             // Check for time-related variables
-            if (rule.valueMap.containsKey("time-counter") ||
-                    rule.valueMap.containsKey("total-time") ||
-                    rule.ruleName.contains("time")) {
+            boolean hasTimeReference = false;
+            for (String key : rule.valueMap.keySet()) {
+                if (TranslatorUtils.containsNameVariant(key, timeVar)) {
+                    hasTimeReference = true;
+                    break;
+                }
+            }
+            if (!hasTimeReference) {
+                for (String guard : rule.guards) {
+                    if (TranslatorUtils.containsNameVariant(guard, timeVar)) {
+                        hasTimeReference = true;
+                        break;
+                    }
+                }
+            }
+            if (hasTimeReference) {
+                return true;
+            }
+            boolean hasTotalTime = rule.valueMap.keySet().stream()
+                    .anyMatch(key -> TranslatorUtils.containsNameVariant(key, PrismConfig.DEFAULT_TOTAL_TIME_KEY));
+            if (hasTotalTime) {
+                return true;
+            }
+            boolean hasTimeInRuleName = TranslatorUtils.containsNameVariant(rule.ruleName, timeVar) ||
+                    TIME_WORD_PATTERN.matcher(rule.ruleName).find();
+
+            if (hasTimeInRuleName) {
                 return true;
             }
         }

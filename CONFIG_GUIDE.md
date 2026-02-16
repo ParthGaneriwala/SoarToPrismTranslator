@@ -31,7 +31,8 @@ Do NOT duplicate information already in Soar rules (like module names or basic c
     "experimentDuration": 1200,
     "sicknessSamplingInterval": 300,
     "sicknessLevels": 2,
-    "responseDuration": 60
+    "responseDuration": 60,
+    "timeVariable": "time-counter"
   }
 }
 ```

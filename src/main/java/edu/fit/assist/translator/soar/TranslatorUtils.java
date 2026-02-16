@@ -1,12 +1,20 @@
 package edu.fit.assist.translator.soar;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 /**
  * Utility methods to support the data-driven translation from Soar rules to PRISM code.
  */
 public class TranslatorUtils {
+    private static final Map<String, Pattern[]> NAME_PATTERN_CACHE = new ConcurrentHashMap<>();
 
     /**
      * Finds an apply rule corresponding to the given base name.
@@ -44,6 +52,42 @@ public class TranslatorUtils {
             }
         }
         return new LinkedHashMap<>();
+    }
+
+    /**
+     * Checks whether the provided text contains the given name or its dash/underscore variants.
+     */
+    public static boolean containsNameVariant(String text, String name) {
+        if (text == null || name == null || name.isEmpty()) return false;
+
+        for (Pattern pattern : NAME_PATTERN_CACHE.computeIfAbsent(name, TranslatorUtils::buildNamePatterns)) {
+            if (pattern.matcher(text).find()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static Pattern[] buildNamePatterns(String name) {
+        Set<String> variants = new LinkedHashSet<>();
+        variants.add(name);
+        String dashVariant = name.replace('_', '-');
+        if (!dashVariant.equals(name)) {
+            variants.add(dashVariant);
+        }
+        String underscoreVariant = name.replace('-', '_');
+        if (!underscoreVariant.equals(name)) {
+            variants.add(underscoreVariant);
+        }
+
+        List<Pattern> patterns = new ArrayList<>();
+        for (String variant : variants) {
+            if (variant == null || variant.isEmpty()) continue;
+            String core = Pattern.quote(variant);
+            patterns.add(Pattern.compile("(?<![A-Za-z0-9_])<" + core + ">(?![A-Za-z0-9_])"));
+            patterns.add(Pattern.compile("(?<![A-Za-z0-9_<>])" + core + "(?![A-Za-z0-9_<>])"));
+        }
+        return patterns.toArray(new Pattern[0]);
     }
 
     /**

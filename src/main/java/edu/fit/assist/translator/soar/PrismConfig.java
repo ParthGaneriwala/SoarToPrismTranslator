@@ -15,6 +15,9 @@ import java.util.*;
  * and contains probability distributions, model parameters, and module definitions.
  */
 public class PrismConfig {
+    public static final String DEFAULT_TIME_VARIABLE = "time-counter";
+    public static final String DEFAULT_TOTAL_TIME_KEY = "total-time";
+
     private String modelType = "dtmc";
     private int maxErrorCount = 5;
     private double modelResolution = 1.0;
@@ -22,6 +25,7 @@ public class PrismConfig {
     private int sicknessSamplingInterval = 300;
     private int sicknessLevels = 2;
     private int responseDuration = 60;
+    private String timeVariable = DEFAULT_TIME_VARIABLE;
     
     private Map<String, Object> constants = new LinkedHashMap<>();
     private Map<String, Double> sicknessProbabilityTable = new LinkedHashMap<>();
@@ -104,6 +108,9 @@ public class PrismConfig {
                 }
                 if (model.has("responseDuration")) {
                     config.responseDuration = model.get("responseDuration").getAsInt();
+                }
+                if (model.has("timeVariable")) {
+                    config.timeVariable = model.get("timeVariable").getAsString();
                 }
             }
             
@@ -243,6 +250,10 @@ public class PrismConfig {
     public int getSicknessSamplingInterval() { return sicknessSamplingInterval; }
     public int getSicknessLevels() { return sicknessLevels; }
     public int getResponseDuration() { return responseDuration; }
+    public String getTimeVariable() { return timeVariable; }
+    public String getEffectiveTimeVariable() {
+        return (timeVariable != null && !timeVariable.isEmpty()) ? timeVariable : DEFAULT_TIME_VARIABLE;
+    }
     public Map<String, Object> getConstants() { return constants; }
     public Map<String, Double> getSicknessProbabilityTable() { return sicknessProbabilityTable; }
     public Map<String, Distribution> getResponseSelect() { return responseSelect; }

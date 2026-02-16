@@ -6,7 +6,8 @@
     "experimentDuration": 1200,
     "sicknessSamplingInterval": 300,
     "sicknessLevels": 2,
-    "responseDuration": 60
+    "responseDuration": 60,
+    "timeVariable": "time-counter"
   },
   "constants": {
     "initialAction": 3
