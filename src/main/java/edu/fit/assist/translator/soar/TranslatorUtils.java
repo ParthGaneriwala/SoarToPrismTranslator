@@ -81,11 +81,10 @@ public class TranslatorUtils {
         }
 
         List<Pattern> patterns = new ArrayList<>();
-        String wordBoundary = "[A-Za-z0-9_]";
         for (String variant : variants) {
             if (variant == null || variant.isEmpty()) continue;
             String core = Pattern.quote(variant);
-            patterns.add(Pattern.compile("(?<!"+ wordBoundary +")<" + core + ">(?!"+ wordBoundary +")"));
+            patterns.add(Pattern.compile("(?<![A-Za-z0-9_])<" + core + ">(?![A-Za-z0-9_])"));
             patterns.add(Pattern.compile("(?<![A-Za-z0-9_<>])" + core + "(?![A-Za-z0-9_<>])"));
         }
         return patterns.toArray(new Pattern[0]);
