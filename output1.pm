@@ -249,31 +249,3 @@ module decision_errors
   [sync] !(state_action=1 & response_state=1) ->
     (decision_correct' = decision_correct) & (error_count' = error_count);
 endmodule
-
-
-// ---- Reward Structures ----
-rewards "mission_completion"
-  time_counter = TOTAL_TIME : 1;
-endrewards
-
-rewards "decision_quality"
-  decision_correct = 1 : 1;
-  decision_correct = 0 : 0;
-endrewards
-
-rewards "error_penalty"
-  decision_correct = 0 : 10;
-endrewards
-
-rewards "time_cost"
-  time_counter < TOTAL_TIME : 1;
-endrewards
-
-rewards "response_efficiency"
-  response_state > 0 : 1;
-endrewards
-
-rewards "sickness_penalty"
-  sick = 1 : 1;
-endrewards
-
