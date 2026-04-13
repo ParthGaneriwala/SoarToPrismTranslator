@@ -651,9 +651,6 @@ public class TimeBasedTranslator {
             output.append("\n");
         }
 
-        // Generate rewards
-        output.append(generateRewards());
-
         return output.toString();
     }
 

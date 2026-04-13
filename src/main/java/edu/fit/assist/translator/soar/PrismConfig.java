@@ -19,6 +19,8 @@ public class PrismConfig {
     public static final String DEFAULT_TOTAL_TIME_KEY = "total-time";
 
     private String modelType = "dtmc";
+    private double timeScale = 1.0;
+    private String timeUnits = "steps";
     private int maxErrorCount = 5;
     private double modelResolution = 1.0;
     private int experimentDuration = 1200;
@@ -33,6 +35,10 @@ public class PrismConfig {
     private Map<String, Distribution> responseDecide = new LinkedHashMap<>();
     private Map<String, ErrorDistribution> decisionErrorDistributions = new LinkedHashMap<>();
     private List<ModuleConfig> modules = new ArrayList<>();
+    private Map<String, ClockConfig> clocks = new LinkedHashMap<>();
+    private Map<String, OperatorConfig> operators = new LinkedHashMap<>();
+    private Map<String, StateConfig> states = new LinkedHashMap<>();
+    private PtaSemanticsConfig ptaSemantics = new PtaSemanticsConfig();
     
     public static class Distribution {
         public String type;
@@ -75,6 +81,58 @@ public class PrismConfig {
         public String range;
         public String init;
     }
+
+    public static class ClockConfig {
+        public String name;
+        public Double minDuration;
+        public Double maxDuration;
+        public Double lowerBound;
+        public Double upperBound;
+        public Double bound;
+        public String units;
+        public String label;
+    }
+
+    public static class OperatorConfig {
+        public String name;
+        public Double minTime;
+        public Double maxTime;
+        public Boolean resetsClock;
+        public Double probability;
+        public List<String> soarRulePatterns = new ArrayList<>();
+        public List<String> resetClocks = new ArrayList<>();
+    }
+
+    public static class StateConfig {
+        public String name;
+        public String variable;
+        public String clock;
+        public Double timeBound;
+        public Double lowerBound;
+        public Double upperBound;
+    }
+
+    public static class PtaSemanticsConfig {
+        public boolean useInitPhase = true;
+        public String initPhaseVar = "init_phase";
+        public String initializeLabel = "initialize";
+        public String examineLabelPrefix = "examine";
+        public String deadlineLabel = "deadline_reached";
+        public String missionCompleteUntaggedLabel = "mission_complete_untagged";
+
+        public String deadlineConstName = "deadline";
+        public String useBoxConstName = "use_box";
+        public String boxAccuracyConstName = "box_accuracy";
+
+        public String attackerIdVar = "state_io_scenario_attacker_id";
+        public String currentPersonIdVar = "state_current_person_id";
+        public String wallClockVar = "state_wall_clock";
+
+        public String missRewriteFrom = "state_io_scenario_attacker_id < state_current_person_id";
+        public String missRewriteTo = "state_io_scenario_attacker_id != state_current_person_id";
+        public boolean applyMissRewrite = true;
+        public boolean runtimeAttackerSampling = true;
+    }
     
     /**
      * Load configuration from JSON file exported from CyberSicknessModel
@@ -84,6 +142,10 @@ public class PrismConfig {
         try (FileReader reader = new FileReader(filePath)) {
             JsonObject root = gson.fromJson(reader, JsonObject.class);
             PrismConfig config = new PrismConfig();
+
+            if (root.has("model_type")) {
+                config.modelType = root.get("model_type").getAsString();
+            }
             
             // Load model settings (from CyberSicknessModel properties)
             if (root.has("model")) {
@@ -112,6 +174,13 @@ public class PrismConfig {
                 if (model.has("timeVariable")) {
                     config.timeVariable = model.get("timeVariable").getAsString();
                 }
+            }
+
+            if (root.has("time_scale")) {
+                config.timeScale = root.get("time_scale").getAsDouble();
+            }
+            if (root.has("time_units")) {
+                config.timeUnits = root.get("time_units").getAsString();
             }
             
             // Load constants
@@ -236,6 +305,159 @@ public class PrismConfig {
                     config.modules.add(module);
                 }
             }
+
+                                if (root.has("clocks")) {
+                                    JsonObject clocksObj = root.getAsJsonObject("clocks");
+                                    for (String key : clocksObj.keySet()) {
+                                        JsonObject clockObj = clocksObj.getAsJsonObject(key);
+                                        ClockConfig clock = new ClockConfig();
+                                        clock.name = key;
+                                        if (clockObj.has("min_duration")) {
+                                            clock.minDuration = clockObj.get("min_duration").getAsDouble();
+                                        }
+                                        if (clockObj.has("max_duration")) {
+                                            clock.maxDuration = clockObj.get("max_duration").getAsDouble();
+                                        }
+                                        if (clockObj.has("lower_bound")) {
+                                            clock.lowerBound = clockObj.get("lower_bound").getAsDouble();
+                                        }
+                                        if (clockObj.has("upper_bound")) {
+                                            clock.upperBound = clockObj.get("upper_bound").getAsDouble();
+                                        }
+                                        if (clockObj.has("bound")) {
+                                            clock.bound = clockObj.get("bound").getAsDouble();
+                                        }
+                                        if (clockObj.has("units")) {
+                                            clock.units = clockObj.get("units").getAsString();
+                                        }
+                                        if (clockObj.has("label")) {
+                                            clock.label = clockObj.get("label").getAsString();
+                                        }
+                                        config.clocks.put(key, clock);
+                                    }
+                                }
+
+                                if (root.has("operators")) {
+                                    JsonObject operatorsObj = root.getAsJsonObject("operators");
+                                    for (String key : operatorsObj.keySet()) {
+                                        JsonObject operatorObj = operatorsObj.getAsJsonObject(key);
+                                        OperatorConfig operator = new OperatorConfig();
+                                        operator.name = key;
+                                        if (operatorObj.has("min_time")) {
+                                            operator.minTime = operatorObj.get("min_time").getAsDouble();
+                                        }
+                                        if (operatorObj.has("max_time")) {
+                                            operator.maxTime = operatorObj.get("max_time").getAsDouble();
+                                        }
+                                        if (operatorObj.has("resets_clock")) {
+                                            operator.resetsClock = operatorObj.get("resets_clock").getAsBoolean();
+                                        }
+                                        if (operatorObj.has("probability")) {
+                                            operator.probability = operatorObj.get("probability").getAsDouble();
+                                        }
+                                        if (operatorObj.has("soarRulePatterns")) {
+                                            JsonArray patterns = operatorObj.getAsJsonArray("soarRulePatterns");
+                                            for (JsonElement pattern : patterns) {
+                                                operator.soarRulePatterns.add(pattern.getAsString());
+                                            }
+                                        }
+                                        if (operatorObj.has("rule_patterns")) {
+                                            JsonArray patterns = operatorObj.getAsJsonArray("rule_patterns");
+                                            for (JsonElement pattern : patterns) {
+                                                operator.soarRulePatterns.add(pattern.getAsString());
+                                            }
+                                        }
+                                        if (operatorObj.has("reset_clocks")) {
+                                            JsonArray resetClocks = operatorObj.getAsJsonArray("reset_clocks");
+                                            for (JsonElement clockName : resetClocks) {
+                                                operator.resetClocks.add(clockName.getAsString());
+                                            }
+                                        }
+                                        config.operators.put(key, operator);
+                                    }
+                                }
+
+                                if (root.has("states")) {
+                                    JsonObject statesObj = root.getAsJsonObject("states");
+                                    for (String key : statesObj.keySet()) {
+                                        JsonObject stateObj = statesObj.getAsJsonObject(key);
+                                        StateConfig state = new StateConfig();
+                                        state.name = key;
+                                        if (stateObj.has("variable")) {
+                                            state.variable = stateObj.get("variable").getAsString();
+                                        }
+                                        if (stateObj.has("clock")) {
+                                            state.clock = stateObj.get("clock").getAsString();
+                                        }
+                                        if (stateObj.has("time_bound")) {
+                                            state.timeBound = stateObj.get("time_bound").getAsDouble();
+                                        }
+                                        if (stateObj.has("lower_bound")) {
+                                            state.lowerBound = stateObj.get("lower_bound").getAsDouble();
+                                        }
+                                        if (stateObj.has("upper_bound")) {
+                                            state.upperBound = stateObj.get("upper_bound").getAsDouble();
+                                        }
+                                        config.states.put(key, state);
+                                    }
+                                }
+
+                                if (root.has("pta_semantics")) {
+                                    JsonObject ptaObj = root.getAsJsonObject("pta_semantics");
+                                    PtaSemanticsConfig semantics = new PtaSemanticsConfig();
+                                    if (ptaObj.has("use_init_phase")) {
+                                        semantics.useInitPhase = ptaObj.get("use_init_phase").getAsBoolean();
+                                    }
+                                    if (ptaObj.has("init_phase_var")) {
+                                        semantics.initPhaseVar = ptaObj.get("init_phase_var").getAsString();
+                                    }
+                                    if (ptaObj.has("initialize_label")) {
+                                        semantics.initializeLabel = ptaObj.get("initialize_label").getAsString();
+                                    }
+                                    if (ptaObj.has("examine_label_prefix")) {
+                                        semantics.examineLabelPrefix = ptaObj.get("examine_label_prefix").getAsString();
+                                    }
+                                    if (ptaObj.has("deadline_label")) {
+                                        semantics.deadlineLabel = ptaObj.get("deadline_label").getAsString();
+                                    }
+                                    if (ptaObj.has("mission_complete_untagged_label")) {
+                                        semantics.missionCompleteUntaggedLabel = ptaObj.get("mission_complete_untagged_label").getAsString();
+                                    }
+
+                                    if (ptaObj.has("deadline_const")) {
+                                        semantics.deadlineConstName = ptaObj.get("deadline_const").getAsString();
+                                    }
+                                    if (ptaObj.has("use_box_const")) {
+                                        semantics.useBoxConstName = ptaObj.get("use_box_const").getAsString();
+                                    }
+                                    if (ptaObj.has("box_accuracy_const")) {
+                                        semantics.boxAccuracyConstName = ptaObj.get("box_accuracy_const").getAsString();
+                                    }
+
+                                    if (ptaObj.has("attacker_id_var")) {
+                                        semantics.attackerIdVar = ptaObj.get("attacker_id_var").getAsString();
+                                    }
+                                    if (ptaObj.has("current_person_id_var")) {
+                                        semantics.currentPersonIdVar = ptaObj.get("current_person_id_var").getAsString();
+                                    }
+                                    if (ptaObj.has("wall_clock_var")) {
+                                        semantics.wallClockVar = ptaObj.get("wall_clock_var").getAsString();
+                                    }
+
+                                    if (ptaObj.has("miss_rewrite_from")) {
+                                        semantics.missRewriteFrom = ptaObj.get("miss_rewrite_from").getAsString();
+                                    }
+                                    if (ptaObj.has("miss_rewrite_to")) {
+                                        semantics.missRewriteTo = ptaObj.get("miss_rewrite_to").getAsString();
+                                    }
+                                    if (ptaObj.has("apply_miss_rewrite")) {
+                                        semantics.applyMissRewrite = ptaObj.get("apply_miss_rewrite").getAsBoolean();
+                                    }
+                                    if (ptaObj.has("runtime_attacker_sampling")) {
+                                        semantics.runtimeAttackerSampling = ptaObj.get("runtime_attacker_sampling").getAsBoolean();
+                                    }
+                                    config.ptaSemantics = semantics;
+                                }
             
             return config;
         }
@@ -243,6 +465,9 @@ public class PrismConfig {
     
     // Getters
     public String getModelType() { return modelType; }
+    public boolean isPtaModel() { return "pta".equalsIgnoreCase(modelType); }
+    public double getTimeScale() { return timeScale; }
+    public String getTimeUnits() { return timeUnits; }
     public int getMaxErrorCount() { return maxErrorCount; }
     public double getModelResolution() { return modelResolution; }
     public int getExperimentDuration() { return experimentDuration; }
@@ -260,6 +485,14 @@ public class PrismConfig {
     public Map<String, Distribution> getResponseDecide() { return responseDecide; }
     public Map<String, ErrorDistribution> getDecisionErrorDistributions() { return decisionErrorDistributions; }
     public List<ModuleConfig> getModules() { return modules; }
+    public Map<String, ClockConfig> getClocks() { return clocks; }
+    public Map<String, OperatorConfig> getOperators() { return operators; }
+    public Map<String, StateConfig> getStates() { return states; }
+    public PtaSemanticsConfig getPtaSemantics() { return ptaSemantics; }
+
+    public boolean hasPtaConfiguration() {
+        return isPtaModel() || !clocks.isEmpty() || !operators.isEmpty() || !states.isEmpty();
+    }
     
     public ModuleConfig getModuleForRule(String ruleName) {
         for (ModuleConfig module : modules) {

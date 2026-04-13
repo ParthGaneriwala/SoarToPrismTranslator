@@ -38,11 +38,11 @@ public class main{
                 }
             }
 
-            // Check if this is a time-based model
-            boolean isTimeBasedModel = hasTimeBasedRules(visitor.rules, config);
-
             String translatedText;
-            if (isTimeBasedModel) {
+            if (config != null && config.hasPtaConfiguration()) {
+                PtaTranslator ptaTranslator = new PtaTranslator(visitor.rules, config);
+                translatedText = ptaTranslator.translateToPta();
+            } else if (hasTimeBasedRules(visitor.rules, config)) {
                 // Use TimeBasedTranslator for time-window models
                 TimeBasedTranslator timeTranslator = (config != null)
                         ? new TimeBasedTranslator(visitor.rules, config)

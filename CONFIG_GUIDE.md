@@ -4,6 +4,8 @@
 
 The Soar to PRISM translator now supports external configuration files that provide probability distributions, model parameters, and module mappings. This allows you to supplement the Soar code with data from external models like the C# CyberSicknessModel.
 
+The same configuration file can also drive PTA generation. In PTA mode, the config supplies clocks, operator timing, and state bounds while the Soar rules still provide the rule structure.
+
 ## Configuration File Format
 
 The configuration file should be in JSON format. It is used to **supplement** information extracted from Soar rules with data that cannot be derived from the rules themselves (like probability distributions).
@@ -38,6 +40,64 @@ Do NOT duplicate information already in Soar rules (like module names or basic c
 ```
 
 These parameters correspond to properties from the C# `CyberSicknessModel` class and provide timing/structural information.
+
+### PTA Model Metadata
+```json
+{
+  "model_type": "pta",
+  "time_scale": 10,
+  "time_units": "deciseconds"
+}
+```
+
+These fields select PTA output and control how time values are scaled and labeled.
+
+### PTA Clocks
+```json
+{
+  "clocks": {
+    "decision_cycle": {
+      "min_duration": 1,
+      "max_duration": 100,
+      "units": "deciseconds"
+    }
+  }
+}
+```
+
+Clocks define timed progress in the PTA model. The translator emits PRISM clock declarations from these entries.
+
+### PTA Operators
+```json
+{
+  "operators": {
+    "perform-action": {
+      "min_time": 1,
+      "max_time": 100,
+      "resets_clock": true,
+      "probability": 1.0,
+      "soarRulePatterns": ["propose\\*perform-action", "apply\\*perform-action"]
+    }
+  }
+}
+```
+
+Operators describe the PTA transitions generated from Soar rules. If `resets_clock` is true, the translator resets matching clocks after the transition.
+
+### PTA States
+```json
+{
+  "states": {
+    "waiting": {
+      "variable": "state-value",
+      "clock": "decision_cycle",
+      "time_bound": 100
+    }
+  }
+}
+```
+
+States describe the timed bounds attached to symbolic Soar states. The translator uses these entries to emit invariants.
 
 ### Constants (Optional - Only for Supplemental Data)
 ```json
@@ -131,6 +191,8 @@ Error probabilities for decision making based on sickness level.
 - Probability distributions associated with specific modules
 - Additional metadata not derivable from Soar
 
+For PTA mode, prefer `clocks`, `operators`, and `states` instead of `modules` when you need timing information.
+
 The translator automatically:
 - Identifies modules from Soar rule names (e.g., rules containing "sickness" → sickness module)
 - Extracts variables from `apply*initialize` rule
@@ -170,6 +232,10 @@ The translator follows this priority order:
 **3. Inference (Fallback):**
 - Time intervals inferred from rule patterns using GCD algorithm
 - Default values when neither Soar nor config provide data
+
+**PTA selection:**
+- `model_type = "pta"` or PTA-specific config sections trigger the PTA translator
+- Otherwise the translator falls back to the existing DTMC/time-based behavior
 
 **What the config should contain:**
 - ✅ Probability distributions from statistical models

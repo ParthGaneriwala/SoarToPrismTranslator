@@ -7,3 +7,7 @@ prism.iml
 .idea/modules.xml
 .idea/vcs.xml
 /target/
+COMPARISON_REPORT.md
+output*.pm
+models/attention/output1_*.pctl
+models/attention/prism_export_*.csv

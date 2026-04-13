@@ -74,7 +74,9 @@ mvn clean compile
 
 ### 3. Run the Translator
 
-**Important:** Currently, only time-based models (models with time-related variables like `time-counter` or `total-time`) are supported. The general translator for non-time-based models is not functional at this time.
+The translator now supports two output paths:
+- `dtmc` for the existing time-based translation flow
+- `pta` for probabilistic timed automata models when the configuration provides PTA metadata
 
 You can run the translator with or without a configuration file:
 
@@ -84,7 +86,7 @@ mvn exec:java -Dexec.mainClass="edu.fit.assist.translator.soar.main" \
   -Dexec.args="path/to/your/model.soar"
 ```
 
-**With configuration file (for probability distributions and model parameters):**
+**With configuration file (for probability distributions, PTA metadata, and model parameters):**
 ```bash
 mvn exec:java -Dexec.mainClass="edu.fit.assist.translator.soar.main" \
   -Dexec.args="path/to/your/model.soar path/to/config.json"
@@ -96,14 +98,47 @@ The translated PRISM model will be:
 
 ### 4. Configuration Support
 
-For complex models requiring probability distributions, response time distributions, or error rates, you can provide an external configuration file. See [CONFIG_GUIDE.md](CONFIG_GUIDE.md) for detailed documentation on:
+For complex models requiring probability distributions, PTA clocks, operator timing, response time distributions, or error rates, you can provide an external configuration file. See [CONFIG_GUIDE.md](CONFIG_GUIDE.md) for detailed documentation on:
 - Configuration file format (JSON)
 - Model parameters
+- PTA clocks, operators, and state bounds
 - Probability distributions
 - Sickness probability tables
 - Response and error distributions
 
 ---
+
+## PTA Example
+
+When `model_type` is set to `pta` and the configuration includes clocks, operators, and state bounds, the translator emits a PTA model instead of a DTMC model. The Soar rules still remain the source of rule structure, operator names, guards, and assignments.
+
+### Example PTA Configuration
+```json
+{
+  "model_type": "pta",
+  "time_scale": 10,
+  "time_units": "deciseconds",
+  "clocks": {
+    "decision_cycle": {
+      "min_duration": 1,
+      "max_duration": 100
+    }
+  },
+  "operators": {
+    "perform-action": {
+      "min_time": 1,
+      "max_time": 100,
+      "resets_clock": true,
+      "probability": 1.0
+    }
+  },
+  "states": {
+    "waiting": {
+      "time_bound": 100
+    }
+  }
+}
+```
 
 ## 🧪 Example
 

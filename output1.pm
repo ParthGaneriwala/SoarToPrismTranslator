@@ -1,279 +1,115 @@
-dtmc
-//PRISM model generated from Soar cognitive model
-//Total time: 1200
+pta
 
-const int TOTAL_TIME = 1200;
-const int sickness_monitor = 1;
-const int mission_monitor  = 0;
-const double pdf1 = 0.90;
-const double initialAction = 3.00;
+// PTA generated from Soar rules using time scale 1.000
+const double time_scale = 1.000;
+// time units: time_units
+const double N = 20.0;
+const double max_deadline = 20.0;
+const int deadline;
+const int use_box;
+const double box_accuracy;
 
+module user
+    state_name : [0..2] init 0;
+    state_start_mission : [0..1] init 0;
+    state_action : [0..5] init 0;
+    state_current_person_id : [0..20] init 0;
+    state_current_person_boxed : [0..1] init use_box;
+    state_io_action : [0..5] init 0;
+    state_io_current_person_id : [0..20] init 0;
+    state_io_current_person_boxed : [0..1] init use_box;
+    state_io_sys_start_mission : [0..1] init 0;
+    t1 : clock;
 
-module time
-  time_counter : [0..TOTAL_TIME] init 0;
-  [sync] time_counter <  TOTAL_TIME -> (time_counter' = time_counter + 1);
-  [sync] time_counter =  TOTAL_TIME -> (time_counter' = time_counter);
+    [initialize] state_start_mission = 0 & init_phase = 0 -> 1.0 : (state_name' = 0) & (state_start_mission' = 0) & (state_action' = 0) & (state_current_person_id' = 0) & (state_current_person_boxed' = 0) & (state_io_action' = 0) & (state_io_current_person_id' = 0) & (state_io_current_person_boxed' = 0);
+    [examine_box_hit] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_action' = 2) & (state_current_person_id' = state_current_person_id + 1) & (state_current_person_boxed' = 0) & (state_io_action' = 1) & (state_io_current_person_id' = state_current_person_id + 1) & (state_io_current_person_boxed' = 0);
+    [examine_box_miss] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_action' = 1) & (state_current_person_id' = state_current_person_id + 1) & (state_current_person_boxed' = 0) & (state_io_action' = 2) & (state_io_current_person_id' = state_current_person_id + 1) & (state_io_current_person_boxed' = 0);
+    [examine_hit] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_action' = 2) & (state_current_person_id' = state_current_person_id + 1) & (state_io_action' = 1) & (state_io_current_person_id' = state_current_person_id + 1) & (state_io_current_person_boxed' = 0);
+    [examine_miss] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_action' = 1) & (state_current_person_id' = state_current_person_id + 1) & (state_io_action' = 2) & (state_io_current_person_id' = state_current_person_id + 1) & (state_io_current_person_boxed' = 0);
+    [deadline_reached] state_tagged_attacker = 0 & state_name = 2 & init_phase = 1 & state_wall_clock >= deadline -> 1.0 : (state_action' = 3) & (state_io_action' = 3) & (state_io_current_person_id' = state_current_person_id) & (state_io_current_person_boxed' = state_current_person_boxed);
+    [mission_complete_untagged] state_tagged_attacker = 0 & state_name = 2 & init_phase = 1 & state_current_person_id >= 20 -> 1.0 : (state_action' = 4) & (state_io_action' = 4) & (state_io_current_person_id' = state_current_person_id) & (state_io_current_person_boxed' = state_current_person_boxed);
+    [mission_complete_tagged] state_tagged_attacker = 1 & state_name = 2 & init_phase = 1 -> 1.0 : (state_action' = 5) & (state_io_action' = 5) & (state_io_current_person_id' = state_current_person_id) & (state_io_current_person_boxed' = state_current_person_boxed);
+    [start_mission] state_start_mission = 0 & init_phase = 1 -> 1.0 : (state_start_mission' = 1);
+    [transition_mission] state_name = 0 & init_phase = 1 -> 1.0 : (state_name' = 2) & (state_action' = 1) & (state_current_person_id' = 0) & (state_current_person_boxed' = use_box) & (state_io_action' = 2) & (state_io_current_person_id' = 0) & (state_io_current_person_boxed' = use_box);
 endmodule
 
-module action_state
-  state_action : [0..3] init 0;
+module tagged
+    state_tagged_attacker : [0..1] init 0;
+    state_io_attacker_location : [0..1] init 0;
+    state_io_scenario_attacker_id : [0..19] init 0;
 
-  [sync] ss_transition_ing=1 & !(d_transition_ing=1) & !(dd_transition_ing=1) -> (state_action' = 1);
-  [sync] d_transition_ing=1 & !(ss_transition_ing=1) & !(dd_transition_ing=1) -> (state_action' = 2);
-  [sync] dd_transition_ing=1 & !(ss_transition_ing=1) & !(d_transition_ing=1) -> (state_action' = 3);
-
-  [sync] !(ss_transition_ing=1) & !(d_transition_ing=1) & !(dd_transition_ing=1) -> (state_action' = state_action);
+    [initialize] state_start_mission = 0 & init_phase = 0 -> box_accuracy : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 0) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 1) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 2) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 3) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 4) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 5) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 6) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 7) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 8) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 9) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 10) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 11) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 12) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 13) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 14) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 15) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 16) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 17) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 18) + (1-box_accuracy)*0.05263157894736842 : (state_tagged_attacker' = 0) & (state_io_attacker_location' = 0) & (state_io_scenario_attacker_id' = 19);
+    [examine_box_hit] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_tagged_attacker' = 1) & (state_io_attacker_location' = 1);
+    [examine_box_miss] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_io_attacker_location' = 0);
+    [examine_hit] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_tagged_attacker' = 1) & (state_io_attacker_location' = 1);
+    [examine_miss] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_io_attacker_location' = 0);
+    [deadline_reached] state_tagged_attacker = 0 & state_name = 2 & init_phase = 1 & state_wall_clock >= deadline -> 1.0 : (state_io_attacker_location' = 0);
+    [mission_complete_untagged] state_tagged_attacker = 0 & state_name = 2 & init_phase = 1 & state_current_person_id >= 20 -> 1.0 : (state_io_attacker_location' = 0);
+    [transition_mission] state_name = 0 & init_phase = 1 -> 1.0 : (state_tagged_attacker' = 0);
 endmodule
 
-module sickness
-  state_name       : [0..1] init mission_monitor;
-  state_sickness_time_interval_set : [0..1] init 0;
-  ts               : [0..1] init 0;
-  state_sickness_checked : [0..1] init 0;
+module attacker
+    state_operator_target_id : [0..1] init 0;
+    state_operator_value : [0..1] init 0;
+    init_clock : clock;
 
-
-  // ---- sample at window start (automatically in sickness monitor mode) ----
-  [sync] time_counter =    0 & state_sickness_checked=0 & state_sickness_time_interval_set=0 ->
-        pdf1     : (ts'=0) & (state_sickness_checked'=1)
-      + (1-pdf1) : (ts'=1) & (state_sickness_checked'=1);
-  [sync] time_counter =    0 & state_sickness_checked=0 & state_sickness_time_interval_set=1 ->
-        1 : (ts'=1) & (state_sickness_checked'=1);
-
-  [sync] time_counter =  300 & state_sickness_checked=0 & state_sickness_time_interval_set=0 ->
-        pdf1     : (ts'=0) & (state_sickness_checked'=1)
-      + (1-pdf1) : (ts'=1) & (state_sickness_checked'=1);
-  [sync] time_counter =  300 & state_sickness_checked=0 & state_sickness_time_interval_set=1 ->
-        1 : (ts'=1) & (state_sickness_checked'=1);
-
-  [sync] time_counter =  600 & state_sickness_checked=0 & state_sickness_time_interval_set=0 ->
-        pdf1     : (ts'=0) & (state_sickness_checked'=1)
-      + (1-pdf1) : (ts'=1) & (state_sickness_checked'=1);
-  [sync] time_counter =  600 & state_sickness_checked=0 & state_sickness_time_interval_set=1 ->
-        1 : (ts'=1) & (state_sickness_checked'=1);
-
-  [sync] time_counter =  900 & state_sickness_checked=0 & state_sickness_time_interval_set=0 ->
-        pdf1     : (ts'=0) & (state_sickness_checked'=1)
-      + (1-pdf1) : (ts'=1) & (state_sickness_checked'=1);
-  [sync] time_counter =  900 & state_sickness_checked=0 & state_sickness_time_interval_set=1 ->
-        1 : (ts'=1) & (state_sickness_checked'=1);
-
-  [sync] time_counter = 1200 & state_sickness_checked=0 & state_sickness_time_interval_set=0 ->
-        pdf1     : (ts'=0) & (state_sickness_checked'=1)
-      + (1-pdf1) : (ts'=1) & (state_sickness_checked'=1);
-  [sync] time_counter = 1200 & state_sickness_checked=0 & state_sickness_time_interval_set=1 ->
-        1 : (ts'=1) & (state_sickness_checked'=1);
-
-  // ---- commit at window end (with sickness_checked reset) ----
-  // Note: Window ends double as resets for next window sampling
-  [sync] time_counter =  299 & state_sickness_checked=0 -> (state_sickness_time_interval_set' = ts);
-  [sync] time_counter =  299 & state_sickness_checked=1 -> (state_sickness_time_interval_set' = ts) & (state_sickness_checked' = 0);
-  [sync] time_counter =  599 & state_sickness_checked=0 -> (state_sickness_time_interval_set' = ts);
-  [sync] time_counter =  599 & state_sickness_checked=1 -> (state_sickness_time_interval_set' = ts) & (state_sickness_checked' = 0);
-  [sync] time_counter =  899 & state_sickness_checked=0 -> (state_sickness_time_interval_set' = ts);
-  [sync] time_counter =  899 & state_sickness_checked=1 -> (state_sickness_time_interval_set' = ts) & (state_sickness_checked' = 0);
-  [sync] time_counter = 1199 & state_sickness_checked=0 -> (state_sickness_time_interval_set' = ts);
-  [sync] time_counter = 1199 & state_sickness_checked=1 -> (state_sickness_time_interval_set' = ts) & (state_sickness_checked' = 0);
-
-  // ---- default transition (keeps state unchanged) ----
-  [sync] !(time_counter = 299) & !(time_counter = 599) & !(time_counter = 899) & !(time_counter = 1199) & !((time_counter = 0 & state_sickness_checked=0)) & !((time_counter = 300 & state_sickness_checked=0)) & !((time_counter = 600 & state_sickness_checked=0)) & !((time_counter = 900 & state_sickness_checked=0)) & !((time_counter = 1200 & state_sickness_checked=0)) ->
-    (state_sickness_time_interval_set' = state_sickness_time_interval_set) & (ts' = ts) & (state_sickness_checked' = state_sickness_checked) & (state_name' = state_name);
 endmodule
 
-module ss_transition
-  ss_transition_done : [0..1] init 0;
-  ss_transition_ing  : [0..1] init 0;
+module deadline_clock
+    state_wall_clock : [0..20] init 0;
+    wall_clock : clock;
 
-  [sync] time_counter < TOTAL_TIME & (state_action=0 | state_action=3) & ss_transition_done=0 & ss_transition_ing=0 ->
-    (ss_transition_ing' = 1);
+    invariant
+    (wall_clock <= deadline)
+    endinvariant
 
-  [sync] ss_transition_ing=1 ->
-    (ss_transition_done' = 1) & (ss_transition_ing' = 0);
-
-  [sync] ss_transition_done=1 & !(ss_transition_ing=1) -> (ss_transition_done' = 0);
-
-  [sync] !(ss_transition_done=1 & !(ss_transition_ing=1)) & !(ss_transition_ing=1) & !(time_counter < TOTAL_TIME & (state_action=0 | state_action=3) & ss_transition_done=0 & ss_transition_ing=0) ->
-    (ss_transition_done' = ss_transition_done) & (ss_transition_ing' = ss_transition_ing);
+    [initialize] state_start_mission = 0 & init_phase = 0 -> 1.0 : (state_wall_clock' = 0);
+    [examine_box_hit] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_wall_clock' = state_wall_clock + 1);
+    [examine_box_miss] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_wall_clock' = state_wall_clock + 1);
+    [examine_hit] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_wall_clock' = state_wall_clock + 1);
+    [examine_miss] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_wall_clock' = state_wall_clock + 1);
+    [transition_mission] state_name = 0 & init_phase = 1 -> 1.0 : (state_wall_clock' = 0);
 endmodule
 
-module d_transition
-  d_transition_done : [0..1] init 0;
-  d_transition_ing  : [0..1] init 0;
+module environment
+    state_environment : [0..1] init 0;
+    state_enviroSet : [0..1] init 0;
+    state_crowd_person_id : [0..1] init 0;
+    state_crowd_person_line : [0..1] init 0;
+    state_crowd_person_index : [0..1] init 0;
+    state_crowd_person_x : [0..1] init 0;
+    state_crowd_person_y : [0..1] init 0;
+    state_io_current_time_inspecting : [0..1] init 0;
+    state_io_current_time_interacting : [0..1] init 0;
+    state_io_timing_step_ready : [1..2] init 1;
+    state_operator_crowd : [0..1] init 0;
+    state_crowd : [0..1] init 0;
 
-  [sync] time_counter < TOTAL_TIME & state_action=1 & d_transition_done=0 & d_transition_ing=0 ->
-    (d_transition_ing' = 1);
-
-  [sync] d_transition_ing=1 ->
-    (d_transition_done' = 1) & (d_transition_ing' = 0);
-
-  [sync] d_transition_done=1 & !(d_transition_ing=1) -> (d_transition_done' = 0);
-
-  [sync] !(d_transition_done=1 & !(d_transition_ing=1)) & !(d_transition_ing=1) & !(time_counter < TOTAL_TIME & state_action=1 & d_transition_done=0 & d_transition_ing=0) ->
-    (d_transition_done' = d_transition_done) & (d_transition_ing' = d_transition_ing);
+    [initialize] state_start_mission = 0 & init_phase = 0 -> 1.0 : (state_environment' = 0) & (state_enviroSet' = 0) & (state_crowd_person_id' = 0) & (state_crowd_person_line' = 0) & (state_crowd_person_index' = 0) & (state_crowd_person_x' = 0) & (state_crowd_person_y' = 0) & (state_io_current_time_inspecting' = 0) & (state_io_current_time_interacting' = 0);
+    [examine_box_hit] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_io_current_time_inspecting' = state_io_current_time_inspecting + 1);
+    [examine_box_miss] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_io_current_time_inspecting' = state_io_current_time_inspecting + 1);
+    [examine_hit] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_io_current_time_inspecting' = state_io_current_time_inspecting + 1);
+    [examine_miss] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_io_current_time_inspecting' = state_io_current_time_inspecting + 1);
+    [sync_environment] state_enviroSet = 0 & init_phase = 1 -> 1.0 : (state_enviroSet' = 1) & (state_crowd' = 0);
+    [transition_mission] state_name = 0 & init_phase = 1 -> 1.0 : (state_environment' = 1);
 endmodule
 
-module dd_transition
-  dd_transition_done : [0..1] init 0;
-  dd_transition_ing  : [0..1] init 0;
+module context
+    init_phase : [0..1] init 0;
+    state_atr_reviewed : [0..1] init 0;
+    state_time_to_inspect : [1..2] init 1;
+    state_current_time_inspecting : [0..1] init 0;
+    state_current_time_interacting : [0..1] init 0;
+    state_superstate : [0..1] init 0;
+    state_sm : [0..1] init 0;
 
-  [sync] time_counter < TOTAL_TIME & state_action=2 & dd_transition_done=0 & dd_transition_ing=0 ->
-    (dd_transition_ing' = 1);
-
-  [sync] dd_transition_ing=1 ->
-    (dd_transition_done' = 1) & (dd_transition_ing' = 0);
-
-  [sync] dd_transition_done=1 & !(dd_transition_ing=1) -> (dd_transition_done' = 0);
-
-  [sync] !(dd_transition_done=1 & !(dd_transition_ing=1)) & !(dd_transition_ing=1) & !(time_counter < TOTAL_TIME & state_action=2 & dd_transition_done=0 & dd_transition_ing=0) ->
-    (dd_transition_done' = dd_transition_done) & (dd_transition_ing' = dd_transition_ing);
+    [initialize] state_start_mission = 0 & init_phase = 0 -> 1.0 : (state_atr_reviewed' = 0) & (state_time_to_inspect' = 1) & (state_current_time_inspecting' = 0) & (state_current_time_interacting' = 0) & (init_phase' = 1);
+    [examine_box_hit] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_current_time_inspecting' = state_io_current_time_inspecting + 1);
+    [examine_box_miss] state_tagged_attacker = 0 & state_current_person_boxed = 1 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_current_time_inspecting' = state_io_current_time_inspecting + 1);
+    [examine_hit] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id = state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_current_time_inspecting' = state_io_current_time_inspecting + 1);
+    [examine_miss] state_tagged_attacker = 0 & state_current_person_boxed = 0 & state_name = 2 & state_io_scenario_attacker_id != state_current_person_id & init_phase = 1 & state_wall_clock < deadline -> 1.0 : (state_current_time_inspecting' = state_io_current_time_inspecting + 1);
+    [start_mission] state_start_mission = 0 & init_phase = 1 -> 1.0 : (state_sm' = 0);
+    [transition_mission] state_name = 0 & init_phase = 1 -> 1.0 : (state_atr_reviewed' = 0) & (state_current_time_inspecting' = 0) & (state_current_time_interacting' = 0);
 endmodule
 
-
-
-// ---- Response Time Modeling ----
-module response_time
-  response_state : [0..60] init 0;  // 0 = idle, 1-60 = responding
-  response_type  : [0..2] init 0;   // 0 = none, 1 = select, 2 = decide
-
-  // ---- Scan-and-Select Response Distribution ----
-  // Triggered when state_action=0 (selecting state)
-  [sync] state_action=0 & response_state=0 & state_sickness_time_interval_set=0 ->
-    0.1254891290537226 : (response_state'=0) & (response_type'=1) +
-    0.1193689520108686 : (response_state'=1) & (response_type'=1) +
-    0.1135989662203803 : (response_state'=2) & (response_type'=1) +
-    0.1081637126289054 : (response_state'=3) & (response_type'=1) +
-    0.1030490025868928 : (response_state'=4) & (response_type'=1) +
-    0.0982433170601717 : (response_state'=5) & (response_type'=1) +
-    0.0770010880636112 : (response_state'=10) & (response_type'=1) +
-    0.0603477935194048 : (response_state'=15) & (response_type'=1) +
-    0.0473204104898837 : (response_state'=20) & (response_type'=1) +
-    0.0371212614633398 : (response_state'=25) & (response_type'=1) +
-    0.0291145139132800 : (response_state'=30) & (response_type'=1) +
-    0.0228317412954684 : (response_state'=35) & (response_type'=1) +
-    0.0179056591272193 : (response_state'=40) & (response_type'=1) +
-    0.0140400462002630 : (response_state'=45) & (response_type'=1) +
-    0.0110056244051438 : (response_state'=50) & (response_type'=1) +
-    0.0086309711025747 : (response_state'=55) & (response_type'=1) +
-    0.0067678108588700 : (response_state'=60) & (response_type'=1);
-
-  [sync] state_action=0 & response_state=0 & state_sickness_time_interval_set=1 ->
-    0.0730289997437676 : (response_state'=0) & (response_type'=1) +
-    0.0723023490551863 : (response_state'=1) & (response_type'=1) +
-    0.0715829677091855 : (response_state'=2) & (response_type'=1) +
-    0.0708707555865960 : (response_state'=3) & (response_type'=1) +
-    0.0701656060718059 : (response_state'=4) & (response_type'=1) +
-    0.0694674133781411 : (response_state'=5) & (response_type'=1) +
-    0.0659570545047791 : (response_state'=10) & (response_type'=1) +
-    0.0626533529516687 : (response_state'=15) & (response_type'=1) +
-    0.0595450561857939 : (response_state'=20) & (response_type'=1) +
-    0.0566212165715386 : (response_state'=25) & (response_type'=1) +
-    0.0538711727038209 : (response_state'=30) & (response_type'=1) +
-    0.0512845506616701 : (response_state'=35) & (response_type'=1) +
-    0.0488512500771622 : (response_state'=40) & (response_type'=1) +
-    0.0465614154153789 : (response_state'=45) & (response_type'=1) +
-    0.0444054224930732 : (response_state'=50) & (response_type'=1) +
-    0.0423738630592796 : (response_state'=55) & (response_type'=1) +
-    0.0404575538311526 : (response_state'=60) & (response_type'=1);
-
-  // ---- Decision Response Distribution ----
-  // Triggered when action transitions to deciding state
-  [sync] state_action=1 & response_state=0 & state_sickness_time_interval_set=0 ->
-    0.0991187524522147 : (response_state'=0) & (response_type'=2) +
-    0.0971560696534812 : (response_state'=1) & (response_type'=2) +
-    0.0952456326231711 : (response_state'=2) & (response_type'=2) +
-    0.0933867020645184 : (response_state'=3) & (response_type'=2) +
-    0.0915791653998049 : (response_state'=4) & (response_type'=2) +
-    0.0898223482521471 : (response_state'=5) & (response_type'=2) +
-    0.0767411357939338 : (response_state'=10) & (response_type'=2) +
-    0.0655876207572535 : (response_state'=15) & (response_type'=2) +
-    0.0560545308012298 : (response_state'=20) & (response_type'=2) +
-    0.0478867954048726 : (response_state'=25) & (response_type'=2) +
-    0.0408729834143182 : (response_state'=30) & (response_type'=2) +
-    0.0348798880608859 : (response_state'=35) & (response_type'=2) +
-    0.0298529821085006 : (response_state'=40) & (response_type'=2) +
-    0.0255016352846176 : (response_state'=45) & (response_type'=2) +
-    0.0217729256988988 : (response_state'=50) & (response_type'=2) +
-    0.0186116170691301 : (response_state'=55) & (response_type'=2) +
-    0.0159292151610216 : (response_state'=60) & (response_type'=2);
-
-  [sync] state_action=1 & response_state=0 & state_sickness_time_interval_set=1 ->
-    0.0730289997437676 : (response_state'=0) & (response_type'=2) +
-    0.0723023490551863 : (response_state'=1) & (response_type'=2) +
-    0.0715829677091855 : (response_state'=2) & (response_type'=2) +
-    0.0708707555865960 : (response_state'=3) & (response_type'=2) +
-    0.0701656060718059 : (response_state'=4) & (response_type'=2) +
-    0.0694674133781411 : (response_state'=5) & (response_type'=2) +
-    0.0659570545047791 : (response_state'=10) & (response_type'=2) +
-    0.0626533529516687 : (response_state'=15) & (response_type'=2) +
-    0.0595450561857939 : (response_state'=20) & (response_type'=2) +
-    0.0566212165715386 : (response_state'=25) & (response_type'=2) +
-    0.0538711727038209 : (response_state'=30) & (response_type'=2) +
-    0.0512845506616701 : (response_state'=35) & (response_type'=2) +
-    0.0488512500771622 : (response_state'=40) & (response_type'=2) +
-    0.0465614154153789 : (response_state'=45) & (response_type'=2) +
-    0.0444054224930732 : (response_state'=50) & (response_type'=2) +
-    0.0423738630592796 : (response_state'=55) & (response_type'=2) +
-    0.0404575538311526 : (response_state'=60) & (response_type'=2);
-
-  // ---- Response Progress ----
-  [sync] response_state > 0 & !(state_action=0 & response_state=0) & !(state_action=1 & response_state=0) -> (response_state' = response_state - 1);
-
-  // ---- Idle State ----
-  [sync] response_state = 0 & response_type > 0 & state_action != 0 & state_action != 1 ->
-    (response_state' = 0) & (response_type' = 0);
-
-  // ---- Default ----
-  [sync] response_state = 0 & response_type = 0 & state_action != 1 & state_action != 0 ->
-    (response_state' = response_state) & (response_type' = response_type);
-endmodule
-
-
-// ---- Decision Error Modeling ----
-module decision_errors
-  decision_correct : [0..1] init 1;  // 1 = correct, 0 = error
-  error_count      : [0..10] init 0; // Track cumulative errors
-
-  // ---- Decision Correctness Sampling ----
-  // Sample when deciding (state_action=1) and response completes
-
-  // Healthy agent decision correctness
-  [sync] state_action=1 & response_state=1 & state_sickness_time_interval_set=0 ->
-    0.9990000000 : (decision_correct'=1) +
-    0.0010000000 : (decision_correct'=0) & (error_count'=min(error_count+1,10));
-
-  // Sick agent decision correctness
-  [sync] state_action=1 & response_state=1 & state_sickness_time_interval_set=1 ->
-    0.9950000000 : (decision_correct'=1) +
-    0.0050000000 : (decision_correct'=0) & (error_count'=min(error_count+1,10));
-
-  // ---- Default State Maintenance ----
-  [sync] !(state_action=1 & response_state=1) ->
-    (decision_correct' = decision_correct) & (error_count' = error_count);
-endmodule
-
-
-// ---- Reward Structures ----
-rewards "mission_completion"
-  time_counter = TOTAL_TIME : 1;
-endrewards
-
-rewards "decision_quality"
-  decision_correct = 1 : 1;
-  decision_correct = 0 : 0;
-endrewards
-
-rewards "error_penalty"
-  decision_correct = 0 : 10;
-endrewards
-
-rewards "time_cost"
-  time_counter < TOTAL_TIME : 1;
-endrewards
-
-rewards "response_efficiency"
-  response_state > 0 : 1;
-endrewards
-
-rewards "sickness_penalty"
-  sick = 1 : 1;
-endrewards
 

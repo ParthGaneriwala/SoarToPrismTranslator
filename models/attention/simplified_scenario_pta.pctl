@@ -1,0 +1,4 @@
+// Attacker gets tagged
+Pmin=? [ F (tagged_attacker=1)]
+Pmax=? [ F (tagged_attacker=1)]
+

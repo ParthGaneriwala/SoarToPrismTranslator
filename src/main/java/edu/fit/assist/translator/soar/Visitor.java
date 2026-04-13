@@ -15,6 +15,31 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
     // Constants for special valueMap markers
     private static final String INCREMENT_SUFFIX = "_INCREMENT";
     private static final String OPERATOR_NAME_SUFFIX = "_operator_name";
+
+    private String extractIncrementSource(String value) {
+        if (value == null) {
+            return null;
+        }
+
+        String trimmed = value.trim();
+
+        // Prefix form: (+ 1 <x>)
+        if (trimmed.matches("\\(\\+\\s*1\\s*<[^>]+>\\s*\\)")) {
+            return trimmed.replaceAll("\\(\\+\\s*1\\s*<([^>]+)>\\s*\\)", "$1").trim();
+        }
+
+        // Prefix form variant: (+ <x> 1)
+        if (trimmed.matches("\\(\\+\\s*<[^>]+>\\s*1\\s*\\)")) {
+            return trimmed.replaceAll("\\(\\+\\s*<([^>]+)>\\s*1\\s*\\)", "$1").trim();
+        }
+
+        // Infix form: <x> + 1
+        if (trimmed.matches("<[^>]+>\\s*\\+\\s*1")) {
+            return trimmed.replaceAll("<([^>]+)>\\s*\\+\\s*1", "$1").trim();
+        }
+
+        return null;
+    }
     /**
      * Visit a parse tree produced by {@link SoarParser#soar}.
      *
@@ -648,18 +673,15 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
             return null;
         }
 
-        // Handle increment expression (+ 1 <var>) by storing in valueMap
-        if (val != null && val.matches("\\(\\+ 1 <.*>\\)")) {
-            // Extract variable from expression like (+ 1 <lc>)
-            String innerVar = val.replaceAll("[()<>]", "")
-                    .replace("+ 1 ", "").trim();
+        // Handle increment expressions by storing a generic increment marker.
+        String incrementSource = extractIncrementSource(val);
+        if (incrementSource != null) {
             String prismVar = cleanVariableName(currentContext);
 
             if (prismVar != null) {
-                // Store increment info in valueMap as a special marker
-                currentRule.valueMap.put(prismVar, innerVar + INCREMENT_SUFFIX);
+                currentRule.valueMap.put(prismVar, incrementSource + INCREMENT_SUFFIX);
             } else {
-                System.out.println("WARNING: Missing context for 1 + <" + innerVar + "> in rule " + currentRule.ruleName);
+                System.out.println("WARNING: Missing context for increment source <" + incrementSource + "> in rule " + currentRule.ruleName);
             }
 
             return null; // skip rest
@@ -681,7 +703,7 @@ public class Visitor<Object> extends AbstractParseTreeVisitor<Object> implements
 
         // Handle substitutions like 'val = 1+<x>' or 'val = X'
         if (val.contains("<") && val.contains(">")) {
-            String attribute = val.replaceAll("(<[a-zA-Z0-9*]+>).*", "$1");
+            String attribute = val.replaceAll("(<[a-zA-Z0-9*_-]+>).*", "$1");
             String replacement = currentRule.contextMap.get(attribute);
 
             if (replacement != null) {
