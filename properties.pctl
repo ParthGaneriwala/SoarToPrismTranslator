@@ -1,0 +1,30 @@
+label "end"       = time_counter=TOTAL_TIME;
+label "not_sick"  = state_sickness_time_interval_set=0;
+label "sick"      = state_sickness_time_interval_set=1;
+label "select"    = state_action=0;
+label "decide"    = state_action=1;
+label "done"      = state_action=3;   // assumption: last phase before looping back to select
+label "any_error" = error_count>0;
+
+// ---- Property file (.pctl) ----
+
+// Progress: the controller always reaches the horizon
+P>=1 [ F "end" ]
+
+// Structural invariants: time and counters stay in bounds
+P>=1 [ G time_counter<=TOTAL_TIME ]
+P>=1 [ G error_count<=10 ]
+P>=1 [ G (state_action>=0 & state_action<=3) ]
+
+// Phase reachability (sanity checks on the translation)
+P>0 [ F "select" ]
+P>0 [ F "decide" ]
+P>0 [ F "done" ]
+
+// Cybersickness: probability of being sick at the horizon 
+P=? [ F "end" & "sick" ]
+P=? [ F "end" & "not_sick" ]
+
+// Decision errors within the mission window
+P=? [ F<=TOTAL_TIME "any_error" ]
+P=? [ F "end" & "any_error" ]
